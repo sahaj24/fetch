@@ -38,12 +38,16 @@ RUN npm install --legacy-peer-deps --no-fund
 # Install specific UI dependencies with fixed versions
 RUN npm install --save tailwindcss@3.3.0 postcss@8.4.31 autoprefixer@10.4.16 tailwind-merge@1.14.0 react-hot-toast@2.4.1 @supabase/supabase-js@2.39.0 sucrase@3.32.0 next-auth@4.24.5 jose@4.14.6 tailwindcss-animate
 
-# Install tailwindcss globally to ensure it's found
-RUN npm install -g tailwindcss postcss autoprefixer
+# Install tailwindcss with specific approach for Cloud Run compatibility
+RUN npm install --save tailwindcss@latest postcss@latest autoprefixer@latest --force
+RUN npm install --save-dev tailwindcss postcss autoprefixer --force
 
-# Create symbolic links to ensure modules are found
-RUN mkdir -p /usr/local/lib/node_modules/tailwindcss && \
-    ln -s /app/node_modules/tailwindcss /usr/local/lib/node_modules/tailwindcss/dist
+# Setup NODE_PATH to ensure module resolution
+ENV NODE_PATH=/app/node_modules
+
+# Ensure the tailwindcss binary is properly linked
+RUN mkdir -p /app/node_modules/.bin && \
+    ln -sf /app/node_modules/tailwindcss/lib/cli.js /app/node_modules/.bin/tailwindcss
 
 # Create config files with proper settings
 RUN echo 'module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } }' > postcss.config.js
@@ -72,6 +76,10 @@ RUN echo "/// <reference types=\"next\" />" > next-env.d.ts && \
 # Copy tailwind config first
 COPY tailwind.config.js .
 
+# Copy simplified CSS and layout files
+COPY simplified-globals.css src/app/globals.css
+COPY simplified-layout.tsx src/app/layout.tsx
+
 # Copy the rest of the application
 COPY . .
 
@@ -92,8 +100,12 @@ RUN npm run build || \
     (echo "Build failed, setting up for development mode instead" && \
     node -e "const pkg = require('./package.json'); pkg.scripts.start = 'next dev -p 8080'; require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));") 
 
+# Copy the ensure-tailwind script
+COPY ensure-tailwind.sh /app/
+RUN chmod +x /app/ensure-tailwind.sh
+
 # Expose port
 EXPOSE 8080
 
-# Start command
-CMD ["npm", "start"]
+# Start the app with our custom script to ensure tailwindcss is available
+CMD ["/app/ensure-tailwind.sh"]
