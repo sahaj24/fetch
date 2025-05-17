@@ -915,7 +915,8 @@ export async function POST(req: NextRequest) {
       // Calculate stats for successful subtitles
       const validSubtitles = subtitles as SubtitleResult[];
       processingStats.totalVideos = validSubtitles.length / formats.length;
-      processingStats.processedVideos = validSubtitles.filter(s => !s.error && !s.isGenerated).length / formats.length;
+      // Round up to the nearest integer to avoid fractional video counts
+      processingStats.processedVideos = Math.ceil(validSubtitles.filter(s => !s.error && !s.isGenerated).length / formats.length);
       processingStats.errorCount = validSubtitles.filter(s => s.error).length;
 
       // Deduct coins for successfully processed videos
@@ -1046,7 +1047,8 @@ export async function POST(req: NextRequest) {
         // Calculate stats for successful subtitles
         const validSubtitles = subtitles as SubtitleResult[];
         processingStats.totalVideos = validSubtitles.length / formats.length || 0;
-        processingStats.processedVideos = validSubtitles.filter(s => !s.error && !s.isGenerated).length / formats.length || 0;
+        // Round up to the nearest integer to avoid fractional video counts
+        processingStats.processedVideos = Math.ceil(validSubtitles.filter(s => !s.error && !s.isGenerated).length / formats.length || 0);
         processingStats.errorCount = validSubtitles.filter(s => s.error).length || 0;
         
         // Deduct coins for successfully processed videos

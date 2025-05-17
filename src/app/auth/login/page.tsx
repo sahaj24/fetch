@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { emailSignIn, googleSignIn } from "../supabase";
@@ -8,7 +8,8 @@ import { supabase } from "@/supabase/config";
 import { saveUserSession, showWelcomeNotification } from "../utils";
 import { Toaster } from "react-hot-toast";
 
-export default function LoginPage() {
+// Separate client component that uses search params
+function LoginForm() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -92,13 +93,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-6 py-12">
-      <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
-      <div className="w-full max-w-md">
-        <div className="mb-10 text-center">
-          <h1 className="text-3xl font-bold">Welcome back</h1>
-          <p className="mt-2 text-gray-600">Sign in to your account</p>
-        </div>
+    <div className="w-full max-w-md">
+      <div className="mb-10 text-center">
+        <h1 className="text-3xl font-bold">Welcome back</h1>
+        <p className="mt-2 text-gray-600">Sign in to your account</p>
+      </div>
 
         <div className="rounded-lg bg-white p-8 shadow-md">
           {error && (
@@ -219,6 +218,17 @@ export default function LoginPage() {
           </div>
         </div>
       </div>
+  );
+}
+
+// Main page component with suspense boundary
+export default function LoginPage() {
+  return (
+    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-6 py-12">
+      <Toaster position="top-right" toastOptions={{ duration: 4000 }} />
+      <Suspense fallback={<div>Loading...</div>}>
+        <LoginForm />
+      </Suspense>
     </div>
   );
 }

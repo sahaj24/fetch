@@ -1,4 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+
+// Tell Next.js this route is dynamic and shouldn't be statically optimized
+export const dynamic = 'force-dynamic';
 import JSZip from 'jszip';
 
 // These are the exact subtitle examples that will be displayed in the UI

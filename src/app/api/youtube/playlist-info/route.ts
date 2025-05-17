@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
 
+// Tell Next.js this route is dynamic and shouldn't be statically optimized
+export const dynamic = 'force-dynamic';
+
 /**
  * Endpoint to get YouTube playlist information quickly and efficiently
  */
