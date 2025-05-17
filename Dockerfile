@@ -38,6 +38,13 @@ RUN npm install --legacy-peer-deps --no-fund
 # Install specific UI dependencies with fixed versions
 RUN npm install --save tailwindcss@3.3.0 postcss@8.4.31 autoprefixer@10.4.16 tailwind-merge@1.14.0 react-hot-toast@2.4.1 @supabase/supabase-js@2.39.0 sucrase@3.32.0 next-auth@4.24.5 jose@4.14.6 tailwindcss-animate
 
+# Install tailwindcss globally to ensure it's found
+RUN npm install -g tailwindcss postcss autoprefixer
+
+# Create symbolic links to ensure modules are found
+RUN mkdir -p /usr/local/lib/node_modules/tailwindcss && \
+    ln -s /app/node_modules/tailwindcss /usr/local/lib/node_modules/tailwindcss/dist
+
 # Create config files with proper settings
 RUN echo 'module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } }' > postcss.config.js
 RUN echo '{"compilerOptions":{"target":"es5","lib":["dom","dom.iterable","esnext"],"allowJs":true,"skipLibCheck":true,"strict":true,"noEmit":true,"esModuleInterop":true,"module":"esnext","moduleResolution":"bundler","resolveJsonModule":true,"isolatedModules":true,"jsx":"preserve","incremental":true,"plugins":[{"name":"next"}],"baseUrl":".","paths":{"@/*":["src/*"]}},"include":["next-env.d.ts","**/*.ts","**/*.tsx",".next/types/**/*.ts"],"exclude":["node_modules"]}' > tsconfig.json
