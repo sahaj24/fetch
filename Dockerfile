@@ -73,12 +73,15 @@ RUN echo 'export default function Page() { return <div style={{display:"flex", f
 RUN echo "/// <reference types=\"next\" />" > next-env.d.ts && \
     echo "/// <reference types=\"next/image-types/global\" />" >> next-env.d.ts
 
-# Copy tailwind config first
-COPY tailwind.config.js .
+# Create tailwind config file inline
+RUN echo 'module.exports = { content: ["./src/**/*.{js,ts,jsx,tsx}"], theme: { extend: {} }, plugins: [] }' > tailwind.config.js
 
-# Copy simplified CSS and layout files
-COPY simplified-globals.css src/app/globals.css
-COPY simplified-layout.tsx src/app/layout.tsx
+# Create a simplified CSS file without tailwind dependencies
+RUN mkdir -p src/app
+RUN echo '/* Basic styles */ body { font-family: system-ui; margin: 0; padding: 0; }' > src/app/globals.css
+
+# Create a simplified layout without tailwind
+RUN echo 'export default function RootLayout({ children }) { return (<html lang="en"><body>{children}</body></html>); }' > src/app/layout.tsx
 
 # Copy the rest of the application
 COPY . .
@@ -100,12 +103,16 @@ RUN npm run build || \
     (echo "Build failed, setting up for development mode instead" && \
     node -e "const pkg = require('./package.json'); pkg.scripts.start = 'next dev -p 8080'; require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));") 
 
-# Copy the ensure-tailwind script
-COPY ensure-tailwind.sh /app/
-RUN chmod +x /app/ensure-tailwind.sh
+# Create a one-line shell script that works around module resolution issues
+RUN mkdir -p /app
+RUN echo "#!/bin/sh" > /app/start.sh
+RUN echo "npm install --save tailwindcss postcss autoprefixer tailwind-merge" >> /app/start.sh
+RUN echo "export NODE_PATH=/app/node_modules" >> /app/start.sh
+RUN echo "exec npm start" >> /app/start.sh
+RUN chmod +x /app/start.sh
 
 # Expose port
 EXPOSE 8080
 
 # Start the app with our custom script to ensure tailwindcss is available
-CMD ["/app/ensure-tailwind.sh"]
+CMD ["/app/start.sh"]
