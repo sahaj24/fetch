@@ -49,8 +49,8 @@ ENV NODE_PATH=/app/node_modules
 RUN mkdir -p /app/node_modules/.bin && \
     ln -sf /app/node_modules/tailwindcss/lib/cli.js /app/node_modules/.bin/tailwindcss
 
-# Create config files with proper settings
-RUN echo 'module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } }' > postcss.config.js
+# Create empty postcss and tailwind config files
+RUN echo 'module.exports = {}' > postcss.config.js
 RUN echo '{"compilerOptions":{"target":"es5","lib":["dom","dom.iterable","esnext"],"allowJs":true,"skipLibCheck":true,"strict":true,"noEmit":true,"esModuleInterop":true,"module":"esnext","moduleResolution":"bundler","resolveJsonModule":true,"isolatedModules":true,"jsx":"preserve","incremental":true,"plugins":[{"name":"next"}],"baseUrl":".","paths":{"@/*":["src/*"]}},"include":["next-env.d.ts","**/*.ts","**/*.tsx",".next/types/**/*.ts"],"exclude":["node_modules"]}' > tsconfig.json
 
 # Set up Supabase config file
@@ -73,15 +73,34 @@ RUN echo 'export default function Page() { return <div style={{display:"flex", f
 RUN echo "/// <reference types=\"next\" />" > next-env.d.ts && \
     echo "/// <reference types=\"next/image-types/global\" />" >> next-env.d.ts
 
-# Create tailwind config file inline
-RUN echo 'module.exports = { content: ["./src/**/*.{js,ts,jsx,tsx}"], theme: { extend: {} }, plugins: [] }' > tailwind.config.js
+# Create empty postcss config file to avoid errors
+RUN echo 'module.exports = {}' > postcss.config.js
+RUN echo '{"plugins":{}}' > .postcssrc.json
 
-# Create a simplified CSS file without tailwind dependencies
+# Remove all CSS with tailwind references
 RUN mkdir -p src/app
-RUN echo '/* Basic styles */ body { font-family: system-ui; margin: 0; padding: 0; }' > src/app/globals.css
+RUN echo '/* Basic styles - no tailwind */ body { font-family: system-ui; margin: 0; padding: 0; }' > src/app/globals.css
+# Find and remove all @tailwind references from CSS files after copying the application
+RUN find /app -name "*.css" -type f -exec sed -i 's/@tailwind.*//g' {} \;
 
-# Create a simplified layout without tailwind
-RUN echo 'export default function RootLayout({ children }) { return (<html lang="en"><body>{children}</body></html>); }' > src/app/layout.tsx
+# Create a simplified layout without any font imports or tailwind
+RUN echo 'export const metadata = { title: "FetchSub", description: "YouTube subtitle extraction service" };' > src/app/layout.js
+RUN echo 'export default function RootLayout({ children }) { return (<html lang="en"><body style={{fontFamily:"system-ui"}}>{children}</body></html>); }' >> src/app/layout.js
+
+# Create a next.config.js that disables CSS imports that use tailwind
+RUN echo 'module.exports = {' > next.config.js
+RUN echo '  webpack: (config) => {' >> next.config.js
+RUN echo '    const oneOf = config.module.rules.find(rule => typeof rule.oneOf === "object").oneOf;' >> next.config.js
+RUN echo '    const moduleCss = oneOf.find(rule => rule.test && rule.test.toString().includes("module\\.css"));' >> next.config.js
+RUN echo '    if (moduleCss) { moduleCss.use = moduleCss.use.filter(rule => !rule.loader || !rule.loader.includes("postcss-loader")); }' >> next.config.js
+RUN echo '    const css = oneOf.find(rule => rule.test && rule.test.toString().includes("\\.css") && !rule.test.toString().includes("module"));' >> next.config.js
+RUN echo '    if (css) { css.use = css.use.filter(rule => !rule.loader || !rule.loader.includes("postcss-loader")); }' >> next.config.js
+RUN echo '    return config;' >> next.config.js
+RUN echo '  },' >> next.config.js
+RUN echo '};' >> next.config.js
+
+# Remove layout.tsx if it exists (to avoid conflicts)
+RUN rm -f src/app/layout.tsx
 
 # Copy the rest of the application
 COPY . .
@@ -103,11 +122,15 @@ RUN npm run build || \
     (echo "Build failed, setting up for development mode instead" && \
     node -e "const pkg = require('./package.json'); pkg.scripts.start = 'next dev -p 8080'; require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2));") 
 
-# Create a one-line shell script that works around module resolution issues
+# Create a start script that bypasses Tailwind completely
 RUN mkdir -p /app
 RUN echo "#!/bin/sh" > /app/start.sh
-RUN echo "npm install --save tailwindcss postcss autoprefixer tailwind-merge" >> /app/start.sh
+RUN echo "# Create a module shim for tailwindcss to prevent errors" >> /app/start.sh
+RUN echo "mkdir -p /app/node_modules/tailwindcss/lib" >> /app/start.sh
+RUN echo "echo 'module.exports = {plugin: () => {}}' > /app/node_modules/tailwindcss/lib/index.js" >> /app/start.sh
+RUN echo "# Set NODE_PATH env var" >> /app/start.sh
 RUN echo "export NODE_PATH=/app/node_modules" >> /app/start.sh
+RUN echo "# Start the app" >> /app/start.sh
 RUN echo "exec npm start" >> /app/start.sh
 RUN chmod +x /app/start.sh
 
