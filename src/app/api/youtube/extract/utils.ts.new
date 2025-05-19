@@ -1,0 +1,345 @@
+// Utility functions for YouTube subtitle extraction
+// We'll use dynamic import for youtube-transcript-api since it's causing TypeScript issues
+const YoutubeTranscriptApi = require('youtube-transcript-api');
+import axios from 'axios';
+import pLimit from 'p-limit';
+import csvParser from 'csv-parser';
+import { Readable } from 'stream';
+
+// Language mapping - simplified version
+const LANGUAGE_CODES: Record<string, string> = {
+  en: "English",
+  es: "Spanish",
+  fr: "French",
+  de: "German",
+  it: "Italian",
+  pt: "Portuguese",
+  ru: "Russian",
+  ja: "Japanese",
+  ko: "Korean",
+  zh: "Chinese",
+  ar: "Arabic",
+  hi: "Hindi",
+  auto: "Auto-detect"
+};
+
+// Types
+interface TranscriptItem {
+  text: string;
+  offset: number;
+  duration: number;
+  start?: number;
+}
+
+interface VideoInfo {
+  title: string;
+  thumbnail_url?: string;
+  author_name?: string;
+  author_url?: string;
+  id: string;
+  channelTitle?: string;
+  publishedAt?: string;
+}
+
+// Result type for subtitle extraction
+export interface SubtitleResult {
+  id: string;
+  videoTitle: string;
+  language: string;
+  format: string;
+  fileSize: string;
+  content: string;
+  url: string;
+  downloadUrl: string;
+  isPlaylistOrChannel?: boolean;
+  isGenerated?: boolean;
+  error?: string;
+  videoUrl?: string;
+  notice?: string;
+  skippedCount?: number;
+}
+
+// Function to extract YouTube video ID from URLs
+export function extractVideoId(url: string): string | null {
+  // For regular YouTube URLs: https://www.youtube.com/watch?v=VIDEO_ID
+  const regExp = /^.*((youtu.be\/)|(v\/)|(\/u\/\w\/)|(embed\/)|(watch\?))\??v?=?([^#&?]*).*/;
+  const match = url.match(regExp);
+  const videoId = (match && match[7]?.length === 11) ? match[7] : null;
+
+  // For shortened YouTube URLs: https://youtu.be/VIDEO_ID
+  if (!videoId && url.includes('youtu.be/')) {
+    const shortUrlRegExp = /youtu\.be\/([^?#&]+)/;
+    const shortMatch = url.match(shortUrlRegExp);
+    if (shortMatch && shortMatch[1]) {
+      return shortMatch[1];
+    }
+  }
+
+  // For playlist URLs, extract the playlist ID
+  if (url.includes('list=')) {
+    const playlistRegExp = /[&?]list=([^&]+)/;
+    const playlistMatch = url.match(playlistRegExp);
+    if (playlistMatch && playlistMatch[1]) {
+      return 'playlist:' + playlistMatch[1];
+    }
+  }
+
+  // For channel URLs, extract the channel ID or handle
+  if (url.includes('/channel/') || url.includes('/c/') || url.includes('/@')) {
+    const channelRegExp = /\/(?:channel|c)\/([^\/\?]+)|\/@([^\/\?]+)/;
+    const channelMatch = url.match(channelRegExp);
+    if (channelMatch && (channelMatch[1] || channelMatch[2])) {
+      return 'channel:' + (channelMatch[1] || channelMatch[2]);
+    }
+  }
+
+  return videoId;
+}
+
+// Function to fetch video information using YouTube API
+export async function getVideoInfo(videoId: string): Promise<VideoInfo> {
+  try {
+    // If it's a playlist or channel ID, we'll handle it differently
+    if (videoId.startsWith('playlist:') || videoId.startsWith('channel:')) {
+      return {
+        id: videoId,
+        title: videoId.startsWith('playlist:') ? 'YouTube Playlist' : 'YouTube Channel',
+        channelTitle: 'Multiple Videos',
+        publishedAt: new Date().toISOString()
+      };
+    }
+    
+    // For regular videos, we'll try to fetch the oEmbed data which doesn't require an API key
+    const response = await axios.get(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
+    
+    if (response.data && response.data.title) {
+      return {
+        id: videoId,
+        title: response.data.title,
+        channelTitle: response.data.author_name || 'YouTube Channel',
+        publishedAt: new Date().toISOString(),
+        author_name: response.data.author_name,
+        author_url: response.data.author_url,
+        thumbnail_url: response.data.thumbnail_url
+      };
+    } else {
+      // Fallback if we couldn't get the data
+      return {
+        id: videoId,
+        title: `YouTube Video (${videoId})`,
+        channelTitle: 'Unknown Channel',
+        publishedAt: new Date().toISOString()
+      };
+    }
+  } catch (error) {
+    console.error(`Error fetching video info for ${videoId}:`, error);
+    // Fallback for error cases
+    return {
+      id: videoId,
+      title: `YouTube Video (${videoId})`,
+      channelTitle: 'Unknown Channel',
+      publishedAt: new Date().toISOString()
+    };
+  }
+}
+
+// Function to generate mock subtitles (used as fallback when actual transcripts can't be fetched)
+export async function generateSubtitles(videoTitle: string, format: string): Promise<{ content: string }> {
+  // This function serves as a fallback for when real transcripts can't be fetched
+  let content = '';
+  
+  // Generate mock subtitles based on video title and format
+  if (format === 'SRT') {
+    // SubRip format
+    content = `1\n00:00:01,000 --> 00:00:04,000\nWelcome to ${videoTitle}\n\n2\n00:00:05,000 --> 00:00:09,000\nThis is a sample subtitle generated for demonstration.\n\n3\n00:00:10,000 --> 00:00:15,000\nIn a real implementation, this would be the actual transcript.`;
+  } else if (format === 'VTT') {
+    // WebVTT format
+    content = `WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nWelcome to ${videoTitle}\n\n00:00:05.000 --> 00:00:09.000\nThis is a sample subtitle generated for demonstration.\n\n00:00:10.000 --> 00:00:15.000\nIn a real implementation, this would be the actual transcript.`;
+  } else if (format === 'TXT') {
+    // Plain text format
+    content = `Welcome to ${videoTitle}\n\nThis is a sample subtitle generated for demonstration.\n\nIn a real implementation, this would be the actual transcript.`;
+  } else if (format === 'JSON') {
+    // JSON format
+    const jsonContent = {
+      videoTitle,
+      subtitles: [
+        { start: 1, end: 4, text: `Welcome to ${videoTitle}` },
+        { start: 5, end: 9, text: 'This is a sample subtitle generated for demonstration.' },
+        { start: 10, end: 15, text: 'In a real implementation, this would be the actual transcript.' }
+      ]
+    };
+    content = JSON.stringify(jsonContent, null, 2);
+  } else {
+    // Default format
+    content = `Welcome to ${videoTitle}\n\nThis is a sample subtitle generated for demonstration.\n\nIn a real implementation, this would be the actual transcript.`;
+  }
+  
+  return { content };
+}
+
+// Function to translate subtitles to a different language
+export async function translateSubtitles(content: string, language: string): Promise<string> {
+  // In a real application, this would call a translation API
+  // For now, we'll just return the original content
+  return content;
+}
+
+// Function to get language name from code
+export function getLanguageName(code: string): string {
+  return LANGUAGE_CODES[code] || 'Unknown';
+}
+
+// Function to fetch actual transcripts from YouTube using youtube-transcript-api
+export async function fetchTranscript(videoId: string, language: string = 'en'): Promise<TranscriptItem[]> {
+  try {
+    // Fetch the transcript using the youtube-transcript-api
+    const transcriptList = await YoutubeTranscriptApi.getTranscript(videoId, {
+      lang: language,
+      country: 'US'
+    });
+    return transcriptList || [];
+  } catch (error) {
+    console.error(`Error fetching transcript for ${videoId}:`, error);
+    return [];
+  }
+}
+
+// Function to get video IDs from a YouTube playlist
+export async function getPlaylistVideoIds(playlistId: string): Promise<string[]> {
+  try {
+    // In a production environment, you'd use the YouTube API to fetch playlist items
+    // For this implementation, we'll just simulate the response
+    console.log(`Fetching videos for playlist: ${playlistId}`);
+    
+    // Simulated response - in reality, you would use the YouTube API
+    const simulatedVideoCount = Math.floor(Math.random() * 10) + 5; // 5-15 videos
+    const videoIds: string[] = [];
+    
+    for (let i = 0; i < simulatedVideoCount; i++) {
+      // Generate random-ish video IDs (11 characters)
+      const randomId = `${playlistId.substring(0, 3)}${i}${Math.random().toString(36).substring(2, 8)}`;
+      videoIds.push(randomId.substring(0, 11));
+    }
+    
+    return videoIds;
+  } catch (error) {
+    console.error(`Error fetching playlist videos for ${playlistId}:`, error);
+    return [];
+  }
+}
+
+// Function to get video IDs from a YouTube channel
+export async function getChannelVideoIds(channelId: string): Promise<string[]> {
+  try {
+    // In a production environment, you'd use the YouTube API to fetch channel videos
+    // For this implementation, we'll just simulate the response
+    console.log(`Fetching videos for channel: ${channelId}`);
+    
+    // Simulated response - in reality, you would use the YouTube API
+    const simulatedVideoCount = Math.floor(Math.random() * 15) + 5; // 5-20 videos
+    const videoIds: string[] = [];
+    
+    for (let i = 0; i < simulatedVideoCount; i++) {
+      // Generate random-ish video IDs (11 characters)
+      const randomId = `${channelId.substring(0, 3)}${i}${Math.random().toString(36).substring(2, 8)}`;
+      videoIds.push(randomId.substring(0, 11));
+    }
+    
+    return videoIds;
+  } catch (error) {
+    console.error(`Error fetching channel videos for ${channelId}:`, error);
+    return [];
+  }
+}
+
+// Function to parse CSV content and extract YouTube URLs
+export async function parseCSVContent(csvContent: string): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    try {
+      const stream = Readable.from([csvContent]);
+      const videoUrls: string[] = [];
+      
+      stream
+        .pipe(csvParser())
+        .on('data', (data: any) => {
+          // Look for YouTube URLs in any column
+          Object.values(data).forEach((value: any) => {
+            if (typeof value === 'string') {
+              const trimmedValue = value.trim();
+              if (
+                trimmedValue.includes('youtube.com/watch') ||
+                trimmedValue.includes('youtu.be/') ||
+                trimmedValue.includes('youtube.com/playlist') ||
+                trimmedValue.includes('youtube.com/channel') ||
+                trimmedValue.includes('youtube.com/c/') ||
+                trimmedValue.includes('youtube.com/@')
+              ) {
+                videoUrls.push(trimmedValue);
+              }
+            }
+          });
+        })
+        .on('end', () => {
+          resolve(videoUrls);
+        })
+        .on('error', (error) => {
+          console.error('Error parsing CSV:', error);
+          reject(error);
+        });
+    } catch (error) {
+      console.error('Error setting up CSV parsing:', error);
+      
+      // Fallback to simple parsing if the CSV parser fails
+      try {
+        const lines = csvContent.split('\n').filter(line => line.trim());
+        const urls = lines
+          .map(line => {
+            const parts = line.split(',');
+            return parts.find(part => 
+              part.trim().includes('youtube.com/watch') || 
+              part.trim().includes('youtu.be/')
+            );
+          })
+          .filter(Boolean) as string[];
+        
+        resolve(urls);
+      } catch (fallbackError) {
+        reject(fallbackError);
+      }
+    }
+  });
+}
+
+// Function to process a batch of items with concurrency limits
+export async function processBatchWithConcurrency<T, R>(
+  items: T[],
+  processFunction: (item: T) => Promise<R>,
+  concurrencyLimit: number = 5
+): Promise<R[]> {
+  const limit = pLimit(concurrencyLimit);
+  
+  // Create an array of limited promises
+  const promises = items.map(item => {
+    return limit(async () => {
+      try {
+        // Process the item with the provided function
+        return await processFunction(item);
+      } catch (error) {
+        console.error(`Error processing item:`, error);
+        throw error;
+      }
+    });
+  });
+  
+  // Wait for all promises to resolve
+  try {
+    return await Promise.all(promises);
+  } catch (error) {
+    console.error(`Error processing batch:`, error);
+    // Continue with partial results if there's an error
+    const safePromises = await Promise.allSettled(promises);
+    return safePromises
+      .filter(result => result.status === 'fulfilled')
+      .map(result => (result as PromiseFulfilledResult<R>).value);
+  }
+}
