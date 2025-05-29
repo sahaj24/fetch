@@ -3,7 +3,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 8080"
+    "start": "next start -p $PORT -H 0.0.0.0"
   },
   "dependencies": {
     "@radix-ui/react-accordion": "^1.2.3",
