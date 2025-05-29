@@ -227,11 +227,12 @@ RUN npm run build || \
 # Expose port 8080 for Cloud Run
 EXPOSE 8080
 
-# Copy the emergency server for fallback
+# Copy the emergency server and server.js for fallback
 COPY emergency-server.js ./
+COPY server.js ./
 
-# Create a fallback for if nothing works
-RUN echo '#!/bin/sh\necho "Verifying build output..."\nif [ -d ".next/standalone" ]; then\n  echo "Starting Next.js app"\n  npm start || node emergency-server.js\nelse\n  echo "No build output found, starting emergency server"\n  node emergency-server.js\nfi' > start.sh
+# Create improved start script with better fallback mechanism
+RUN echo '#!/bin/sh\necho "Starting Fetch application on port ${PORT:-8080}..."\n\n# Print debugging information\necho "Current directory: $(pwd)"\necho "Checking for Next.js build output..."\nif [ -d ".next" ]; then\n  echo "Next.js build found at $(pwd)/.next"\n  ls -la .next\nelse\n  echo "No .next directory found!"\nfi\n\n# Try npm start first\nexport PORT=${PORT:-8080}\necho "Attempting to start Next.js app with npm start..."\nnpm start\nif [ $? -ne 0 ]; then\n  echo "Failed to start with npm start, trying server.js fallback..."\n  echo "Checking if server.js exists..."\n  if [ -f "server.js" ]; then\n    echo "Found server.js, attempting to start it..."\n    node server.js\n    if [ $? -ne 0 ]; then\n      echo "server.js failed, falling back to emergency server..."\n      node emergency-server.js\n    fi\n  else\n    echo "server.js not found, falling back to emergency server..."\n    node emergency-server.js\n  fi\nfi' > start.sh
 RUN chmod +x start.sh
 
 # Start the app
