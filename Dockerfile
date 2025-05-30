@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     jq \
     build-essential \
+    chromium \
+    ca-certificates \
     fonts-liberation \
     libappindicator3-1 \
     libasound2 \
@@ -44,20 +46,21 @@ RUN apt-get update && apt-get install -y \
     libxtst6 \
     lsb-release \
     wget \
+    xdg-utils \
+    && ln -sf python3 /usr/bin/python \
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    && ln -sf /usr/bin/python3 /usr/bin/python
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy package.json and package-lock.json
+# Copy package.json and filter out problematic dependencies
 COPY package.json ./
-COPY package-lock.json ./
+RUN cat package.json | \
+    jq 'del(.dependencies["youtube-dl-exec"]) | \
+        del(.dependencies["yt-dlp-exec"]) | \
+        del(.dependencies["puppeteer"]) | \
+        del(.dependencies["bcrypt"]) | \
+        del(.dependencies["playwright"])' > package.json.filtered && \
+    mv package.json.filtered package.json
 
-# Create a temporary package.json without problematic dependencies
-RUN cp package.json package.json.original && \
-    cat package.json.original | jq 'del(.dependencies."yt-dlp-exec") | del(.dependencies."youtube-dl-exec")' > package.json
-
-# Install dependencies
-RUN npm install --legacy-peer-deps
 # Create package-lock.json
 RUN echo '{}' > package-lock.json
 
