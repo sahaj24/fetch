@@ -88,8 +88,55 @@ RUN npm install --legacy-peer-deps --force
 # Install tailwindcss and related packages globally to ensure npx works
 RUN npm install -g tailwindcss postcss autoprefixer
 
-# Create tailwind config manually
-RUN echo 'module.exports = { content: ["./src/**/*.{js,ts,jsx,tsx}"], theme: { extend: {} }, plugins: [] };' > tailwind.config.js
+# Create tailwind config manually with theme configuration
+RUN echo 'module.exports = {
+  content: ["./src/**/*.{js,ts,jsx,tsx}"],
+  theme: {
+    extend: {
+      colors: {
+        border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
+        ring: "hsl(var(--ring))",
+        background: "hsl(var(--background))",
+        foreground: "hsl(var(--foreground))",
+        primary: {
+          DEFAULT: "hsl(var(--primary))",
+          foreground: "hsl(var(--primary-foreground))",
+        },
+        secondary: {
+          DEFAULT: "hsl(var(--secondary))",
+          foreground: "hsl(var(--secondary-foreground))",
+        },
+        destructive: {
+          DEFAULT: "hsl(var(--destructive))",
+          foreground: "hsl(var(--destructive-foreground))",
+        },
+        muted: {
+          DEFAULT: "hsl(var(--muted))",
+          foreground: "hsl(var(--muted-foreground))",
+        },
+        accent: {
+          DEFAULT: "hsl(var(--accent))",
+          foreground: "hsl(var(--accent-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
+        },
+        card: {
+          DEFAULT: "hsl(var(--card))",
+          foreground: "hsl(var(--card-foreground))",
+        },
+      },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
+    },
+  },
+  plugins: [],
+};' > tailwind.config.js
 RUN echo 'module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } };' > postcss.config.js
 
 # Install essential dependencies
@@ -111,6 +158,9 @@ RUN echo 'import { createClient } from "@supabase/supabase-js";' > src/supabase/
 # Create a health check API endpoint
 RUN mkdir -p src/app/api/health
 RUN echo 'export async function GET() { return Response.json({ status: "ok" }); }' > src/app/api/health/route.js
+
+# Add additional Tailwind plugins
+RUN npm install -g tailwindcss-animate
 
 # Copy application code except node_modules
 COPY . .
