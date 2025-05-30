@@ -85,11 +85,12 @@ COPY .env .env.local
 # Install filtered dependencies
 RUN npm install --legacy-peer-deps --force
 
-# Install tailwindcss and related packages
-RUN npm install --no-save tailwindcss@latest postcss@latest autoprefixer@latest
+# Install tailwindcss and related packages globally to ensure npx works
+RUN npm install -g tailwindcss postcss autoprefixer
 
-# Create tailwind config
-RUN npx tailwindcss init -p
+# Create tailwind config manually
+RUN echo 'module.exports = { content: ["./src/**/*.{js,ts,jsx,tsx}"], theme: { extend: {} }, plugins: [] };' > tailwind.config.js
+RUN echo 'module.exports = { plugins: { tailwindcss: {}, autoprefixer: {} } };' > postcss.config.js
 
 # Install essential dependencies
 RUN npm install --no-save --legacy-peer-deps @supabase/supabase-js
