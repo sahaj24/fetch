@@ -1,6 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+
+// Add PayPal type definitions
+declare global {
+  interface Window {
+    paypal: any;
+  }
+}
+
 import {
   Card,
   CardContent,
@@ -34,6 +42,8 @@ interface PricingPlan {
 }
 
 export default function Page() {
+  const [paypalScriptLoaded, setPaypalScriptLoaded] = useState(false);
+  
   const pricingPlans: PricingPlan[] = [
     {
       name: "Free",
@@ -85,6 +95,46 @@ export default function Page() {
       buttonText: "Contact Sales",
     },
   ];
+
+  // Load the PayPal script
+  useEffect(() => {
+    if (!paypalScriptLoaded) {
+      const script = document.createElement('script');
+      script.src = "https://www.paypal.com/sdk/js?client-id=AWBrlsaWcy6uSafXspmvBDMmapaYYSgocsGz2wBawAewf2XhO2tPxfsHXqgt09eOOq94hWhvr4fcH_Ts&vault=true&intent=subscription";
+      script.setAttribute('data-sdk-integration-source', 'button-factory');
+      script.async = true;
+      script.onload = () => setPaypalScriptLoaded(true);
+      document.body.appendChild(script);
+    }
+  }, [paypalScriptLoaded]);
+
+  // Initialize PayPal buttons once the script is loaded
+  useEffect(() => {
+    if (paypalScriptLoaded && window.paypal) {
+      try {
+        window.paypal.Buttons({
+          style: {
+            shape: 'rect',
+            color: 'black',
+            layout: 'vertical',
+            label: 'subscribe'
+          },
+          createSubscription: function(data: any, actions: any) {
+            return actions.subscription.create({
+              /* Creates the subscription */
+              plan_id: 'P-177295437L963004XNA5AZLQ'
+            });
+          },
+          onApprove: function(data: any, actions: any) {
+            console.log('Subscription approved:', data.subscriptionID);
+            // You can redirect to success page or update UI here
+          }
+        }).render('#paypal-button-container-P-177295437L963004XNA5AZLQ');
+      } catch (error) {
+        console.error('PayPal button rendering failed:', error);
+      }
+    }
+  }, [paypalScriptLoaded]);
 
   const handleSubscribe = (planName: string) => {
     console.log(`Subscribing to ${planName} plan`);
@@ -163,13 +213,28 @@ export default function Page() {
                 </ul>
               </CardContent>
               <CardFooter>
-                <Button
-                  onClick={() => handleSubscribe(plan.name)}
-                  className="w-full"
-                  variant={plan.popular ? "default" : "outline"}
-                >
-                  {plan.buttonText}
-                </Button>
+                {plan.name === "Pro" ? (
+                  <div className="w-full">
+                    <div id="paypal-button-container-P-177295437L963004XNA5AZLQ" className="w-full"></div>
+                    {!paypalScriptLoaded && (
+                      <Button
+                        className="w-full mt-2"
+                        variant="default"
+                        disabled
+                      >
+                        Loading Payment Options...
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <Button
+                    onClick={() => handleSubscribe(plan.name)}
+                    className="w-full"
+                    variant={plan.popular ? "default" : "outline"}
+                  >
+                    {plan.buttonText}
+                  </Button>
+                )}
               </CardFooter>
             </Card>
           ))}
