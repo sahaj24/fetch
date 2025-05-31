@@ -147,7 +147,7 @@ export default function Page() {
       console.error("User not logged in, cannot initialize PayPal");
       setAuthError("Please log in to subscribe to a plan");
       // Redirect to login page
-      router.push(`/auth/login?returnTo=${encodeURIComponent('/pricing')}`);
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
       return;
     }
     
@@ -248,8 +248,8 @@ export default function Page() {
     // Check if user is logged in
     if (!user) {
       console.log("User not logged in, redirecting to login");
-      // Redirect to login page with return URL
-      router.push(`/auth/login?returnTo=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(planName)}`);
+      // Redirect to login page with callback URL
+      router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(planName)}`);
       return;
     }
     
