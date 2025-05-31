@@ -287,6 +287,8 @@ export default function Page() {
           // If user is authenticated, show payment modal
           if (user) {
             setModalOpen(true);
+            // Ensure auth prompt is closed for logged in users
+            setShowAuthPrompt(false);
           } else {
             // Show auth prompt if not authenticated
             setShowAuthPrompt(true);
@@ -305,7 +307,12 @@ export default function Page() {
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user]);
+    
+    // Safety check: if user is authenticated, make sure auth prompt is not shown
+    if (user && !isLoading) {
+      setShowAuthPrompt(false);
+    }
+  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user, isLoading]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
