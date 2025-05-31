@@ -57,9 +57,15 @@ interface PricingPlan {
 export default function Page() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session, status } = useSession();
-  const isAuthenticated = status === "authenticated";
-  const isLoading = status === "loading";
+  const { data: session } = useSession();
+  
+  // Simplified authentication check - directly using session object
+  const isAuthenticated = !!session;
+  
+  // Debug auth status
+  useEffect(() => {
+    console.log("Auth status:", { session, isAuthenticated });
+  }, [session, isAuthenticated]);
   
   // PayPal configuration constants from environment variables
   const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "ATKi8kjOWlRBVCGdeAIeMslERAQ2q-u6h3XMCtmqWKIMPYv26yKKTcJpXgYrmiI1GWw80hIlioRrZTIW";
@@ -78,15 +84,23 @@ export default function Page() {
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
   
   // Check for plan in URL params (for when user returns from login)
+  // This should only run once when the component is mounted
   useEffect(() => {
-    const planFromParams = searchParams.get("plan");
-    if (planFromParams && isAuthenticated) {
-      const planObj = pricingPlans.find(plan => plan.name === planFromParams);
-      if (planObj && planObj.name !== "Free") {
-        handleSubscribe(planObj.name);
+    // Only attempt to auto-open modal if user is authenticated
+    if (isAuthenticated) {
+      const planFromParams = searchParams.get("plan");
+      if (planFromParams) {
+        console.log("Found plan in URL params:", planFromParams);
+        const planObj = pricingPlans.find(plan => plan.name === planFromParams);
+        if (planObj && planObj.name !== "Free") {
+          // Short timeout to ensure session is fully loaded
+          setTimeout(() => {
+            handleSubscribe(planObj.name);
+          }, 100);
+        }
       }
     }
-  }, [searchParams, isAuthenticated]);
+  }, []); // Empty dependency array - only run once on mount
   
   // Use the working PayPal subscription plan ID provided
   const SUBSCRIPTION_PLAN_IDS = {
@@ -250,17 +264,23 @@ export default function Page() {
   };
 
   const handleSubscribe = (planName: string) => {
-    // Don't do anything while authentication is being checked
-    if (isLoading) {
+    console.log("Subscribe clicked for plan:", planName, "- Auth status:", isAuthenticated);
+    
+    // For Free plan, handle differently
+    if (planName === "Free") {
+      router.push("/auth/signup");
       return;
     }
     
-    // Check if user is authenticated
-    if (!isAuthenticated && status === "unauthenticated") {
+    // For paid plans, check authentication
+    if (!isAuthenticated) {
+      console.log("Not authenticated, redirecting to login");
       // Redirect to login page with plan information as query parameter
       router.push(`/auth/login?plan=${planName}&redirect=${encodeURIComponent("/pricing")}`);
       return;
     }
+    
+    console.log("User is authenticated, proceeding with subscription");
     
     // Find the selected plan details
     const planDetails = pricingPlans.find(plan => plan.name === planName);
@@ -281,19 +301,22 @@ export default function Page() {
     }
   };
 
+  // Initialize PayPal when conditions are met
   useEffect(() => {
-    // Wait for auth status to be determined
-    if (isLoading) return;
-    
+    // Only initialize when all conditions are met and user is authenticated
     if (modalOpen && paypalLoaded && selectedPlan && !paypalInitialized && isAuthenticated) {
       console.log("Initializing PayPal for plan:", selectedPlan);
       initializePayPal();
-    } else if (modalOpen && status === "unauthenticated") {
-      // Safety check: only redirect if definitively not authenticated
-      setModalOpen(false);
-      router.push(`/auth/login?plan=${selectedPlan}&redirect=${encodeURIComponent("/pricing")}`);
     }
-  }, [modalOpen, paypalLoaded, selectedPlan, paypalInitialized, isAuthenticated, status, isLoading]);
+    // No else clause with redirection - let the CheckoutView handle authentication display
+  }, [modalOpen, paypalLoaded, selectedPlan, paypalInitialized, isAuthenticated]);
+  
+  // This handles the modal closing automatically when user logs out
+  useEffect(() => {
+    if (!isAuthenticated && modalOpen) {
+      setModalOpen(false);
+    }
+  }, [isAuthenticated, modalOpen]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
