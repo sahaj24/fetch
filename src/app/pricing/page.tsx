@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Script from "next/script";
+import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "next/navigation";
 
 // Define PayPal on window object for TypeScript
 declare global {
@@ -51,6 +53,10 @@ interface PricingPlan {
 }
 
 export default function Page() {
+  // Access authentication state
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+  
   // PayPal configuration constants from environment variables
   const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "ATKi8kjOWlRBVCGdeAIeMslERAQ2q-u6h3XMCtmqWKIMPYv26yKKTcJpXgYrmiI1GWw80hIlioRrZTIW";
   // Secret key is stored in environment but only used on server-side
@@ -130,11 +136,17 @@ export default function Page() {
   const DEBUG_MODE = true;
 
   const initializePayPal = () => {
-    // Prevent re-initialization if already done for this plan
+    // Prevent re-initialization if already done 
     if (paypalInitialized) {
       return;
     }
-    
+    // Make sure user is logged in
+    if (!user) {
+      const errorMsg = "You must be logged in to subscribe. Please log in and try again.";
+      console.error(errorMsg);
+      setPaypalError(errorMsg);
+      return;
+    }
     if (!window.paypal) {
       const errorMsg = "PayPal SDK not loaded yet. Please try again in a moment.";
       console.error(errorMsg);
@@ -232,6 +244,13 @@ export default function Page() {
     if (planName === "Free") {
       window.location.href = "/register";
     } else if (planName === "Pro" || planName === "Enterprise") {
+      // Check if user is logged in
+      if (!user) {
+        // Redirect to login page with return URL
+        router.push(`/auth/login?returnUrl=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(planName)}`);
+        return;
+      }
+      
       // Find the selected plan details
       const plan = pricingPlans.find(p => p.name === planName);
       
@@ -252,15 +271,15 @@ export default function Page() {
   };
 
   useEffect(() => {
-    // When modal is open, selected plan exists, and PayPal is loaded, initialize the buttons
-    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized) {
+    // When modal is open, selected plan exists, PayPal is loaded, and user is logged in, initialize the buttons
+    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized && user) {
       // Small timeout to ensure DOM is updated with the button container
       const timer = setTimeout(() => {
         initializePayPal();
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized]);
+  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
@@ -529,17 +548,34 @@ export default function Page() {
               </DialogHeader>
               <div className="flex flex-col space-y-4 p-2">
                 {/* PayPal Button Container */}
-                <div className="bg-white p-4 rounded-lg">
-                  <div 
-                    id={`paypal-button-${selectedPlan}`} 
-                    className="rounded-md overflow-hidden mx-auto"
-                  />
-                  {paypalError && (
-                    <div className="text-red-500 text-sm text-center mt-2">
-                      {paypalError}
-                    </div>
-                  )}
-                </div>
+                {!user ? (
+                  <div className="bg-white p-6 rounded-lg text-center space-y-4">
+                    <p className="text-sm">You need to be logged in to subscribe to a plan.</p>
+                    <Button 
+                      onClick={() => {
+                        router.push(`/auth/login?returnUrl=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(selectedPlan || '')}`);
+                      }}
+                      className="w-full bg-primary hover:bg-primary/90"
+                    >
+                      Log in to Continue
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                      Don't have an account? <a href="/auth/register" className="text-primary hover:underline">Register</a>
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-white p-4 rounded-lg">
+                    <div 
+                      id={`paypal-button-${selectedPlan}`} 
+                      className="rounded-md overflow-hidden mx-auto"
+                    />
+                    {paypalError && (
+                      <div className="text-red-500 text-sm text-center mt-2">
+                        {paypalError}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <p className="text-xs text-center text-muted-foreground px-2">
                   By subscribing, you agree to our Terms of Service and Privacy Policy.
                   You can cancel your subscription at any time from your account settings.
