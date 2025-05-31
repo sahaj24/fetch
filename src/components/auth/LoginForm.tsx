@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { EyeIcon, EyeOffIcon, LockIcon, MailIcon } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
@@ -17,19 +17,29 @@ export default function LoginForm() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [redirectUrl, setRedirectUrl] = useState('');
-  const { signIn, signInWithGoogle } = useAuth();
+  const [redirectPath, setRedirectPath] = useState('');
+  const [redirectPlan, setRedirectPlan] = useState('');
+  const { signIn, user } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
-  // Get redirect URL from query params on component mount
+  // Check for redirect parameters when component loads
   useEffect(() => {
-    // Check if we have a redirect URL in the query string
-    const params = new URLSearchParams(window.location.search);
-    const redirect = params.get('redirect');
-    if (redirect) {
-      setRedirectUrl(redirect);
+    const redirect = searchParams?.get('redirect');
+    const plan = searchParams?.get('plan');
+    if (redirect) setRedirectPath(redirect);
+    if (plan) setRedirectPlan(plan);
+  }, [searchParams]);
+
+  // If user is logged in and we have a redirect path, redirect them
+  useEffect(() => {
+    if (user && redirectPath) {
+      const redirectTo = redirectPath === 'pricing' && redirectPlan
+        ? `/pricing?plan=${redirectPlan}`
+        : `/${redirectPath}`;
+      router.push(redirectTo);
     }
-  }, []);
+  }, [user, redirectPath, redirectPlan, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,10 +52,7 @@ export default function LoginForm() {
         throw new Error(result.error);
       }
       
-      // Handle redirect if present, otherwise let auth context handle it
-      if (redirectUrl) {
-        router.push(redirectUrl);
-      }
+      // Redirect will be handled by the useEffect hook when user is set
     } catch (err: any) {
       console.error('Login error:', err);
       
@@ -57,30 +64,9 @@ export default function LoginForm() {
     }
   };
   
+  // There's no signInWithGoogle in the AuthContext, so we'll just show a message
   const handleGoogleSignIn = async () => {
-    setIsLoading(true);
-    setError('');
-    
-    try {
-      // For Google sign-in, we'll use the standard method
-      // The redirect will be handled when the user returns
-      const result = await signInWithGoogle();
-      
-      // Store the redirect URL in localStorage so we can use it after OAuth callback
-      if (redirectUrl) {
-        localStorage.setItem('authRedirectUrl', redirectUrl);
-      }
-      
-      if (result.error) {
-        throw new Error(result.error);
-      }
-      
-      // No need to redirect here as Supabase OAuth will handle redirection
-    } catch (err: any) {
-      console.error('Google sign in error:', err);
-      setError(err.message || 'Failed to sign in with Google');
-      setIsLoading(false);
-    }
+    setError('Google sign-in is not available at this time.');
   };
 
   return (
@@ -113,7 +99,7 @@ export default function LoginForm() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="password">Password</Label>
-              <Link href="/forgot-password" className="text-xs text-blue-600 hover:underline">
+              <Link href="/auth/forgot-password" className="text-xs text-blue-600 hover:underline">
                 Forgot password?
               </Link>
             </div>
@@ -172,7 +158,7 @@ export default function LoginForm() {
           className="w-full border-gray-300 hover:bg-gray-50 text-black bg-white"
           variant="outline"
           onClick={handleGoogleSignIn}
-          disabled={isLoading}
+          disabled={true} // Disabled since Google sign-in is not implemented
         >
           <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
             <path
@@ -198,7 +184,7 @@ export default function LoginForm() {
       <CardFooter>
         <div className="text-center w-full text-sm">
           Don't have an account?{" "}
-          <Link href="/signup" className="text-blue-600 hover:underline font-medium">
+          <Link href="/auth/signup" className="text-blue-600 hover:underline font-medium">
             Sign up
           </Link>
         </div>
