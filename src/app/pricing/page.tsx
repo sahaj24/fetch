@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Script from "next/script";
+import { addSubscriptionCoins } from "@/utils/coinUtils";
+import { supabase } from "@/supabase/config";
 
 // Define PayPal on window object for TypeScript
 declare global {
@@ -67,6 +69,7 @@ export default function Page() {
   const [selectedPlanDetails, setSelectedPlanDetails] = useState<PricingPlan | null>(null);
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
+  const [updatedCoinBalance, setUpdatedCoinBalance] = useState<number | null>(null);
   
   // Check URL parameters for plan selection after login redirect
   useEffect(() => {
@@ -213,12 +216,45 @@ export default function Page() {
             },
           });
         },
-        onApprove: (data: any, actions: any) => {
-          console.log("Subscription approved:", data);
-          // Update state to show success message in modal
+        onApprove: async (data: any, actions: any) => {
+          console.log('Subscription approved:', data);
           setSubscriptionId(data.subscriptionID);
+          
+          // Get the current user
+          const { data: { session } } = await supabase.auth.getSession();
+          const userId = session?.user?.id;
+          
+          if (userId && selectedPlanDetails) {
+            // Add the subscription coins to the user's balance
+            const success = await addSubscriptionCoins(
+              userId,
+              selectedPlanDetails.name,
+              selectedPlanDetails.monthlyCoins
+            );
+            
+            if (success) {
+              console.log(`Successfully added ${selectedPlanDetails.monthlyCoins} coins to user ${userId}`);
+              
+              // Get the updated coin balance to display to the user
+              const { data: userData } = await supabase
+                .from('user_coins')
+                .select('balance')
+                .eq('user_id', userId)
+                .single();
+              
+              if (userData) {
+                setUpdatedCoinBalance(userData.balance);
+              }
+            } else {
+              console.error('Failed to add subscription coins to user balance');
+              // Continue anyway to show success message
+            }
+          } else {
+            console.error('Cannot add subscription coins: Missing user ID or plan details');
+          }
+          
           setSubscriptionSuccess(true);
-          return actions.redirect(); // Will be handled by our modal now
+          return actions.subscription.get();
         },
         onError: (err: any) => {
           console.error("PayPal error:", err);
@@ -513,6 +549,19 @@ export default function Page() {
                   <p className="text-sm text-muted-foreground">
                     Your subscription ID is: <span className="font-mono bg-muted px-2 py-1 rounded text-xs">{subscriptionId}</span>
                   </p>
+                  
+                  {/* Show the coin update information */}
+                  <div className="mt-4 p-4 bg-primary/10 rounded-lg">
+                    <p className="text-lg font-semibold text-primary">
+                      {selectedPlanDetails?.monthlyCoins} coins added to your account!
+                    </p>
+                    {updatedCoinBalance !== null && (
+                      <p className="text-sm mt-1">
+                        Your new balance: <span className="font-bold">{updatedCoinBalance} coins</span>
+                      </p>
+                    )}
+                  </div>
+                  
                   <p className="mt-4 text-sm">
                     You will be charged ${selectedPlanDetails?.monthlyUsd} monthly for {selectedPlanDetails?.monthlyCoins} coins.
                   </p>

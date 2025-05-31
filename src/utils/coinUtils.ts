@@ -102,3 +102,80 @@ export async function getUserCoinsBalance(userId: string): Promise<number | null
     return null;
   }
 }
+
+/**
+ * Updates a user's coin balance when they purchase a subscription
+ * Adds the subscription coins to their balance and updates their subscription tier
+ */
+export async function addSubscriptionCoins(userId: string, planName: string, coinsToAdd: number): Promise<boolean> {
+  try {
+    if (!userId) {
+      console.error('Cannot add subscription coins: No user ID provided');
+      return false;
+    }
+
+    console.log(`Adding ${coinsToAdd} coins for user ${userId} from ${planName} subscription`);
+
+    // First get the current balance
+    const { data: userData, error: fetchError } = await supabase
+      .from('user_coins')
+      .select('balance, total_earned')
+      .eq('user_id', userId)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching user coins data:', fetchError);
+      return false;
+    }
+
+    if (!userData) {
+      console.error('User coins record not found');
+      return false;
+    }
+
+    const currentBalance = userData.balance || 0;
+    const totalEarned = userData.total_earned || 0;
+    const newBalance = currentBalance + coinsToAdd;
+    const newTotalEarned = totalEarned + coinsToAdd;
+
+    // Update the user's coin balance and subscription tier
+    const { error: updateError } = await supabase
+      .from('user_coins')
+      .update({
+        balance: newBalance,
+        total_earned: newTotalEarned,
+        subscription_tier: planName.toUpperCase(),
+        last_coin_refresh: new Date().toISOString()
+      })
+      .eq('user_id', userId);
+    
+    if (updateError) {
+      console.error('Error updating user coins balance:', updateError);
+      return false;
+    }
+
+    // Record the transaction
+    const transactionId = `subscription_${Date.now()}`;
+    const { error: transError } = await supabase
+      .from('coin_transactions')
+      .insert({
+        user_id: userId,
+        transaction_id: transactionId,
+        type: 'SUBSCRIPTION',
+        amount: coinsToAdd,
+        description: `${planName} subscription coins`,
+        created_at: new Date().toISOString()
+      });
+      
+    if (transError) {
+      console.error('Error recording subscription transaction:', transError);
+      // Continue anyway since the coins were added
+    }
+
+    console.log(`Successfully added ${coinsToAdd} coins to user ${userId}. New balance: ${newBalance}`);
+    return true;
+  } catch (error) {
+    console.error('Error in addSubscriptionCoins:', error);
+    return false;
+  }
+}
