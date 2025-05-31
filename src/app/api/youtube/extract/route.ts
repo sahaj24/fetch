@@ -16,13 +16,7 @@ import {
   getLanguageName
 } from "./utils";
 import { OPERATION_COSTS } from "@/app/coins/utils";
-import { createClient } from "@supabase/supabase-js";
-
-// Initialize Supabase with service role key for admin operations
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || ''
-);
+import { supabase } from "@/supabase/config";
 
 // Create a simple in-memory cache for transcripts to avoid redundant fetching
 type TranscriptCache = {
