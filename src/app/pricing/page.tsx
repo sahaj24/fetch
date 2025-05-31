@@ -73,22 +73,6 @@ export default function Page() {
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
   
-  // Store selected plan in localStorage before redirecting to login
-  const storeSelectedPlan = (planName: string): void => {
-    if (typeof window !== 'undefined') {
-      console.log('Storing plan in localStorage:', planName);
-      // Use a timestamp to know when this was set
-      const planData = JSON.stringify({
-        plan: planName,
-        timestamp: new Date().getTime()
-      });
-      localStorage.setItem('selectedPlanBeforeLogin', planData);
-    }
-  };
-  
-  // Check for stored plan in localStorage
-  const [storedPlan, setStoredPlan] = useState<string | null>(null);
-  
   // Use the working PayPal subscription plan ID provided
   const SUBSCRIPTION_PLAN_IDS = {
     Pro: "P-9TY72104PT817263KNA5N6FY", // Working plan ID 
@@ -313,9 +297,7 @@ export default function Page() {
     } else if (planName === "Pro" || planName === "Enterprise") {
       // Check if user is logged in
       if (!user) {
-        console.log('User not logged in, storing plan and redirecting to login');
-        // Store the selected plan before redirecting
-        storeSelectedPlan(planName);
+        console.log('User not logged in, redirecting to login');
         // Redirect to login page with callback URL
         router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
         return;
@@ -341,24 +323,7 @@ export default function Page() {
     }
   };
 
-  // Handle automatic modal opening when returning from login with stored plan
-  useEffect(() => {
-    // Only proceed if the user is logged in and there's a stored plan
-    if (user && storedPlan && (storedPlan === "Pro" || storedPlan === "Enterprise")) {
-      const plan = pricingPlans.find(p => p.name === storedPlan);
-      
-      if (plan) {
-        // Reset paypal errors and initialized state
-        setPaypalError(null);
-        setPaypalInitialized(false);
-        setSelectedPlan(storedPlan);
-        setSelectedPlanDetails(plan);
-        
-        // Open the subscription modal
-        setModalOpen(true);
-      }
-    }
-  }, [user, storedPlan, pricingPlans]);
+  // No special handling needed after login - user will need to click subscribe again
   
   // Initialize PayPal when modal opens and script is loaded
   useEffect(() => {
@@ -682,14 +647,8 @@ export default function Page() {
                     <Button 
                       onClick={() => {
                         console.log('Login button clicked in modal');
-                        if (selectedPlan) {
-                          console.log('Storing selected plan before redirect:', selectedPlan);
-                          storeSelectedPlan(selectedPlan);
-                        }
-                        // Use a short delay to ensure the localStorage is set before navigation
-                        setTimeout(() => {
-                          router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
-                        }, 100);
+                        // Simply redirect to login with callback to pricing page
+                        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
                       }}
                       className="w-full bg-primary hover:bg-primary/90"
                     >
