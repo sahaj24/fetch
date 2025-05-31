@@ -100,38 +100,25 @@ export default function Page() {
   
   // Initialize PayPal button when script loads
   const initializePayPal = () => {
-    if (window.paypal && document.getElementById('paypal-button-container')) {
+    if (window.paypal && document.getElementById('paypal-button-container-P-8TR81148EW103371JNA5JSCA')) {
       try {
         window.paypal.Buttons({
           style: {
             shape: 'rect',
-            color: 'gold',
+            color: 'black',
             layout: 'vertical',
             label: 'paypal'
           },
-          createOrder: function(data: any, actions: any) {
-            return actions.order.create({
-              purchase_units: [{
-                description: 'Monthly subscription to Fetch Pro Plan',
-                amount: {
-                  value: '9.99',
-                  currency_code: 'USD'
-                }
-              }]
+          createSubscription: function(data: any, actions: any) {
+            return actions.subscription.create({
+              /* Creates the subscription */
+              plan_id: 'P-8TR81148EW103371JNA5JSCA'
             });
           },
           onApprove: function(data: any, actions: any) {
-            return actions.order.capture().then(function(details: any) {
-              // Show success message
-              alert('Transaction completed! Order ID: ' + details.id);
-              // You would normally call your server here to record the subscription
-            });
-          },
-          onError: function(err: any) {
-            console.error('PayPal error occurred:', err);
-            setPaypalError(true);
+            alert(data.subscriptionID); // You can add optional success message for the subscriber here
           }
-        }).render('#paypal-button-container');
+        }).render('#paypal-button-container-P-8TR81148EW103371JNA5JSCA');
         setPaypalLoaded(true);
       } catch (error) {
         console.error('Failed to render PayPal button:', error);
@@ -219,7 +206,7 @@ export default function Page() {
               <CardFooter>
                 {plan.name === "Pro" ? (
                   <div className="w-full space-y-2">
-                    <div id="paypal-button-container" className="w-full min-h-[40px]">
+                    <div id="paypal-button-container-P-8TR81148EW103371JNA5JSCA" className="w-full min-h-[40px]">
                       {!paypalLoaded && !paypalError && (
                         <Button 
                           className="w-full bg-[#0070ba] hover:bg-[#005ea6]"
@@ -353,9 +340,10 @@ export default function Page() {
         </footer>
       </div>
       
-      {/* PayPal Script */}
+      {/* PayPal Subscription Script */}
       <Script
-        src="https://www.paypal.com/sdk/js?client-id=sb&currency=USD"
+        src="https://www.paypal.com/sdk/js?client-id=AWBrlsaWcy6uSafXspmvBDMmapaYYSgocsGz2wBawAewf2XhO2tPxfsHXqgt09eOOq94hWhvr4fcH_Ts&vault=true&intent=subscription"
+        data-sdk-integration-source="button-factory"
         strategy="lazyOnload"
         onLoad={initializePayPal}
         onError={() => setPaypalError(true)}
