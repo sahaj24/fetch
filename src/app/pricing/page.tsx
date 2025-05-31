@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Script from "next/script";
-import { useAuth } from "@/context/AuthContext";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 // Define PayPal on window object for TypeScript
 declare global {
@@ -35,6 +35,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import CheckoutView from "@/components/checkout/CheckoutView";
 
 interface PricingFeature {
   name: string;
@@ -53,16 +54,16 @@ interface PricingPlan {
 }
 
 export default function Page() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { data: session, status } = useSession();
+  const isAuthenticated = status === "authenticated";
+  
   // PayPal configuration constants from environment variables
   const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "ATKi8kjOWlRBVCGdeAIeMslERAQ2q-u6h3XMCtmqWKIMPYv26yKKTcJpXgYrmiI1GWw80hIlioRrZTIW";
   // Secret key is stored in environment but only used on server-side
   const PAYPAL_URL = process.env.PAYPAL_URL || "https://api.sandbox.paypal.com";
   const PAYPAL_MODE = process.env.NEXT_PUBLIC_PAYPAL_MODE || "sandbox";
-  
-  // Auth context for user authentication
-  const { user, isLoading: authLoading } = useAuth();
-  const router = useRouter();
-  const searchParams = useSearchParams();
   
   // State variables for PayPal integration and modal
   const [paypalLoaded, setPaypalLoaded] = useState(false);
@@ -73,7 +74,17 @@ export default function Page() {
   const [selectedPlanDetails, setSelectedPlanDetails] = useState<PricingPlan | null>(null);
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
-  const [authError, setAuthError] = useState<string | null>(null);
+  
+  // Check for plan in URL params (for when user returns from login)
+  useEffect(() => {
+    const planFromParams = searchParams.get("plan");
+    if (planFromParams && isAuthenticated) {
+      const planObj = pricingPlans.find(plan => plan.name === planFromParams);
+      if (planObj && planObj.name !== "Free") {
+        handleSubscribe(planObj.name);
+      }
+    }
+  }, [searchParams, isAuthenticated]);
   
   // Use the working PayPal subscription plan ID provided
   const SUBSCRIPTION_PLAN_IDS = {
@@ -140,15 +151,6 @@ export default function Page() {
   const initializePayPal = () => {
     // Prevent re-initialization if already done for this plan
     if (paypalInitialized) {
-      return;
-    }
-    
-    // Verify user is logged in before initializing PayPal
-    if (!user) {
-      console.error("User not logged in, cannot initialize PayPal");
-      setAuthError("Please log in to subscribe to a plan");
-      // Redirect to login page
-      router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
       return;
     }
     
@@ -246,26 +248,42 @@ export default function Page() {
   };
 
   const handleSubscribe = (planName: string) => {
-    // Check if user is logged in
-    if (!user) {
-      console.log("User not logged in, redirecting to login");
-      // Redirect to login page with callback URL
-      router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(planName)}`);
+    // Check if user is authenticated
+    if (!isAuthenticated) {
+      // Redirect to login page with plan information as query parameter
+      router.push(`/auth/login?plan=${planName}&redirect=${encodeURIComponent("/pricing")}`);
       return;
     }
     
-    // Find the selected plan from our pricing plans
-    const plan = pricingPlans.find(p => p.name === planName);
+    // Find the selected plan details
+    const planDetails = pricingPlans.find(plan => plan.name === planName);
     
-    if (plan) {
+    if (planDetails) {
+      // Set the selected plan and its details
       setSelectedPlan(planName);
-      setSelectedPlanDetails(plan);
+      setSelectedPlanDetails(planDetails);
+      
+      // Reset PayPal initialization status
+      setPaypalInitialized(false);
+      
+      // Open the subscription modal
       setModalOpen(true);
-      setAuthError(null);
+      
+      // PayPal initialization will be triggered when the modal is opened
+      // via the useEffect that watches modalOpen state
     }
   };
 
-
+  useEffect(() => {
+    if (modalOpen && paypalLoaded && selectedPlan && !paypalInitialized && isAuthenticated) {
+      console.log("Initializing PayPal for plan:", selectedPlan);
+      initializePayPal();
+    } else if (modalOpen && !isAuthenticated) {
+      // Safety check: close modal and redirect if not authenticated
+      setModalOpen(false);
+      router.push(`/auth/login?plan=${selectedPlan}&redirect=${encodeURIComponent("/pricing")}`);
+    }
+  }, [modalOpen, paypalLoaded, selectedPlan, paypalInitialized, isAuthenticated]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
@@ -510,61 +528,13 @@ export default function Page() {
               </DialogFooter>
             </>
           ) : (
-            // Checkout View
-            <>
-              <DialogHeader>
-                <DialogTitle className="text-xl font-bold">
-                  {selectedPlanDetails ? `Subscribe to ${selectedPlanDetails.name} Plan` : "Subscribe"}
-                </DialogTitle>
-                <DialogDescription>
-                  {selectedPlanDetails && (
-                    <div className="mt-2 space-y-2">
-                      <p className="font-medium text-foreground">
-                        {selectedPlanDetails.description}
-                      </p>
-                      <p className="text-lg font-bold text-primary">
-                        ${selectedPlanDetails.monthlyUsd}/month
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {selectedPlanDetails.monthlyCoins} coins per month
-                      </p>
-                    </div>
-                  )}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="flex flex-col space-y-4 p-2">
-                {/* PayPal Button Container */}
-                <div className="bg-white p-4 rounded-lg">
-                  <div 
-                    id={`paypal-button-${selectedPlan}`} 
-                    className="rounded-md overflow-hidden mx-auto"
-                  />
-                  {paypalError && (
-                    <div className="text-red-500 text-sm text-center mt-2">
-                      {paypalError}
-                    </div>
-                  )}
-                  {authError && (
-                    <div className="text-red-500 text-sm text-center mt-2">
-                      {authError}
-                    </div>
-                  )}
-                </div>
-                <p className="text-xs text-center text-muted-foreground px-2">
-                  By subscribing, you agree to our Terms of Service and Privacy Policy.
-                  You can cancel your subscription at any time from your account settings.
-                </p>
-              </div>
-              <DialogFooter className="sm:justify-center">
-                <Button 
-                  variant="outline" 
-                  onClick={() => setModalOpen(false)}
-                  className="mt-2"
-                >
-                  Cancel
-                </Button>
-              </DialogFooter>
-            </>
+            // Checkout View using the CheckoutView component
+            <CheckoutView
+              selectedPlan={selectedPlan}
+              selectedPlanDetails={selectedPlanDetails}
+              paypalError={paypalError}
+              onClose={() => setModalOpen(false)}
+            />
           )}
         </DialogContent>
       </Dialog>
