@@ -1,5 +1,8 @@
 import { supabase } from "@/supabase/config";
 
+// Define operation types for coin transactions
+export type OperationType = 'EXTRACT_SUBTITLES' | 'BATCH_EXTRACT' | 'DOWNLOAD' | 'OTHER';
+
 /**
  * Initializes a user's coins account with 50 coins if they don't have one yet
  * Returns the user's coin balance 
@@ -100,6 +103,88 @@ export async function getUserCoinsBalance(userId: string): Promise<number | null
   } catch (error) {
     console.error('Error in getUserCoinsBalance:', error);
     return null;
+  }
+}
+
+/**
+ * Deducts coins from a user's balance when they perform an operation
+ * Returns true if successful, false if the user doesn't have enough coins or if there's an error
+ */
+export async function deductCoinsForOperation(userId: string, operationType: OperationType, coinsToDeduct: number): Promise<boolean> {
+  try {
+    if (!userId) {
+      console.error('Cannot deduct coins: No user ID provided');
+      return false;
+    }
+
+    console.log(`Attempting to deduct ${coinsToDeduct} coins for user ${userId} for operation ${operationType}`);
+
+    // First get the current balance
+    const { data: userData, error: fetchError } = await supabase
+      .from('user_coins')
+      .select('balance, total_spent')
+      .eq('user_id', userId)
+      .single();
+    
+    if (fetchError) {
+      console.error('Error fetching user coins data:', fetchError);
+      return false;
+    }
+
+    if (!userData) {
+      console.error('User coins record not found');
+      return false;
+    }
+
+    const currentBalance = userData.balance || 0;
+    const totalSpent = userData.total_spent || 0;
+
+    // Check if the user has enough coins
+    if (currentBalance < coinsToDeduct) {
+      console.error(`User ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
+      return false;
+    }
+
+    const newBalance = currentBalance - coinsToDeduct;
+    const newTotalSpent = totalSpent + coinsToDeduct;
+
+    // Update the user's coin balance
+    const { error: updateError } = await supabase
+      .from('user_coins')
+      .update({
+        balance: newBalance,
+        total_spent: newTotalSpent
+      })
+      .eq('user_id', userId);
+    
+    if (updateError) {
+      console.error('Error updating user coins balance:', updateError);
+      return false;
+    }
+
+    // Record the transaction
+    const transactionId = `${operationType.toLowerCase()}_${Date.now()}`;
+    const { error: transError } = await supabase
+      .from('coin_transactions')
+      .insert({
+        user_id: userId,
+        transaction_id: transactionId,
+        type: 'SPENT',
+        amount: -coinsToDeduct, // Negative amount to indicate spending
+        description: `${operationType} operation`,
+        created_at: new Date().toISOString()
+      });
+      
+    if (transError) {
+      console.error('Error recording deduction transaction:', transError);
+      // Continue anyway since the coins were deducted
+    }
+
+    console.log(`Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${newBalance}`);
+    return true;
+  } catch (error) {
+    console.error('Error in deductCoinsForOperation:', error);
+    return false;
   }
 }
 

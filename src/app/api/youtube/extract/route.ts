@@ -17,6 +17,7 @@ import {
 } from "./utils";
 import { OPERATION_COSTS } from "@/app/coins/utils";
 import { supabase } from "@/supabase/config";
+import { deductCoinsForOperation } from "@/utils/coinUtils";
 
 // Create a simple in-memory cache for transcripts to avoid redundant fetching
 type TranscriptCache = {
@@ -955,56 +956,18 @@ export async function POST(req: NextRequest) {
             // No need to deduct from database for anonymous users
             // We'll just track usage client-side with localStorage
           } else {
-          
-            // Find user record in database (try both user_id and auth_id columns)
-            const { data: userCoins, error: findError } = await supabase
-              .from('user_coins')
-            .select('user_id, balance')
-            .eq('user_id', userId)
-            .single();
-          
-          if (findError || !userCoins) {
-            throw new Error(`Cannot find user coins record: ${findError?.message || 'No record found'}`);
-          }
-          
-          // Generate transaction ID
-          const transactionId = `extract_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-          
-          // Record transaction
-          const { error: txnError } = await supabase
-            .from('transactions')
-            .insert({
-              user_id: userCoins.user_id,
-              amount: cost,
-              type: 'spend',
-              description: `Video processing: ${processingStats.processedVideos} videos × ${formats.length} formats`,
-              id: transactionId
-            });
+            // Use the new utility function to deduct coins
+            const operationType = processingStats.processedVideos > 1 ? 'BATCH_EXTRACT' : 'EXTRACT_SUBTITLES';
+            const success = await deductCoinsForOperation(userId, operationType, cost);
             
-          if (txnError && Object.keys(txnError).length > 0) {
-            console.error('Transaction error details:', txnError);
-            throw new Error(`Transaction error: ${txnError.message || JSON.stringify(txnError) || 'Unknown transaction error'}`);
-          }
-          
-          // Update balance
-          const newBalance = userCoins.balance - cost;
-          const { error: updateError } = await supabase
-            .from('user_coins')
-            .update({ balance: newBalance })
-            .eq('user_id', userCoins.user_id);
-            
-          if (updateError && Object.keys(updateError).length > 0) {
-            // Try to rollback transaction
-            await supabase
-              .from('transactions')
-              .delete()
-              .eq('id', transactionId);
-              
-            throw new Error(`Update error: ${updateError.message}`);
-          }
-          
-              console.log(`✅ Coin deduction successful: ${cost} coins. New balance: ${newBalance}`);
+            if (success) {
+              console.log(`✅ Coin deduction successful: ${cost} coins deducted for ${operationType}`);
+            } else {
+              console.error(`❌ Failed to deduct ${cost} coins for user ${userId}`);
+              // Continue processing anyway - we'll still provide the results
+              // but log the error for monitoring
             }
+          }
           } catch (deductError) {
             console.error(`Error in coin handling for user ${userId}:`, deductError);
           }
@@ -1049,7 +1012,7 @@ export async function POST(req: NextRequest) {
         if (userId && processingStats.processedVideos > 0) {
           // DIRECT APPROACH: Implement coin deduction directly here to avoid UUID format issues
           try {
-            console.log(`Attempting direct coin deduction for user ${userId}`);
+            console.log(`Attempting coin deduction for CSV processing for user ${userId}`);
             
             // Calculate cost for this operation
             let cost = 0;
@@ -1062,56 +1025,18 @@ export async function POST(req: NextRequest) {
             
             // Minimum cost is 1 coin
             cost = Math.max(cost, 1);
-            console.log(`Direct deduction: cost = ${cost} coins`);
+            console.log(`CSV processing cost = ${cost} coins`);
             
-            // Find user record in database (try both user_id and auth_id columns)
-            const { data: userCoins, error: findError } = await supabase
-              .from('user_coins')
-              .select('user_id, balance')
-              .eq('user_id', userId)
-              .single();
+            // Use the new utility function to deduct coins
+            const success = await deductCoinsForOperation(userId, 'BATCH_EXTRACT', cost);
             
-            if (findError || !userCoins) {
-              throw new Error(`Cannot find user coins record: ${findError?.message || 'No record found'}`);
+            if (success) {
+              console.log(`✅ Coin deduction successful: ${cost} coins deducted for CSV processing`);
+            } else {
+              console.error(`❌ Failed to deduct ${cost} coins for user ${userId} for CSV processing`);
+              // Continue processing anyway - we'll still provide the results
+              // but log the error for monitoring
             }
-            
-            // Generate transaction ID
-            const transactionId = `extract_csv_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
-            
-            // Record transaction
-            const { error: txnError } = await supabase
-              .from('transactions')
-              .insert({
-                user_id: userCoins.user_id,
-                amount: cost,
-                type: 'spend',
-                description: `CSV processing: ${processingStats.processedVideos} videos`,
-                id: transactionId
-              });
-              
-            if (txnError && Object.keys(txnError).length > 0) {
-              console.error('Transaction error details:', txnError);
-              throw new Error(`Transaction error: ${txnError.message || JSON.stringify(txnError) || 'Unknown transaction error'}`);
-            }
-            
-            // Update balance
-            const newBalance = userCoins.balance - cost;
-            const { error: updateError } = await supabase
-              .from('user_coins')
-              .update({ balance: newBalance })
-              .eq('user_id', userCoins.user_id);
-              
-            if (updateError && Object.keys(updateError).length > 0) {
-              // Try to rollback transaction
-              await supabase
-                .from('transactions')
-                .delete()
-                .eq('id', transactionId);
-                
-              throw new Error(`Update error: ${updateError.message}`);
-            }
-            
-            console.log(`✅ Coin deduction successful: ${cost} coins. New balance: ${newBalance}`);
             
           } catch (deductError) {
             console.error(`Error in direct coin deduction for user ${userId}:`, deductError);
