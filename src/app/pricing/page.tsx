@@ -63,6 +63,10 @@ export default function Page() {
   const PAYPAL_URL = process.env.PAYPAL_URL || "https://api.sandbox.paypal.com";
   const PAYPAL_MODE = process.env.NEXT_PUBLIC_PAYPAL_MODE || "sandbox";
   
+  // Check for plan parameter in URL (when returning from login)
+  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+  const planFromUrl = searchParams.get('plan');
+  
   // State variables for PayPal integration and modal
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [paypalError, setPaypalError] = useState<string | null>(null);
@@ -269,6 +273,32 @@ export default function Page() {
       window.location.href = "/contact";
     }
   };
+
+  // Handle automatic modal opening when returning from login with plan parameter
+  useEffect(() => {
+    // Only proceed if the user is logged in and there's a plan parameter in the URL
+    if (user && planFromUrl && (planFromUrl === "Pro" || planFromUrl === "Enterprise")) {
+      const plan = pricingPlans.find(p => p.name === planFromUrl);
+      
+      if (plan) {
+        // Reset paypal errors and initialized state
+        setPaypalError(null);
+        setPaypalInitialized(false);
+        setSelectedPlan(planFromUrl);
+        setSelectedPlanDetails(plan);
+        
+        // Open the subscription modal
+        setModalOpen(true);
+        
+        // Remove the plan parameter from the URL to prevent reopening on refresh
+        if (typeof window !== 'undefined') {
+          const url = new URL(window.location.href);
+          url.searchParams.delete('plan');
+          window.history.replaceState({}, document.title, url.toString());
+        }
+      }
+    }
+  }, [user, planFromUrl, pricingPlans]);
 
   useEffect(() => {
     // When modal is open, selected plan exists, PayPal is loaded, and user is logged in, initialize the buttons
