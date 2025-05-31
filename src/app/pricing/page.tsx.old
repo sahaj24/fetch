@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Script from "next/script";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 
 // Define PayPal on window object for TypeScript
 declare global {
@@ -9,6 +11,7 @@ declare global {
     paypal: any;
   }
 }
+
 import {
   Card,
   CardContent,
@@ -52,6 +55,18 @@ interface PricingPlan {
 }
 
 export default function Page() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { data: session } = useSession();
+  
+  // Simplified authentication check - directly using session object
+  const isAuthenticated = !!session;
+  
+  // Debug auth status
+  useEffect(() => {
+    console.log("Auth status:", { session, isAuthenticated });
+  }, [session, isAuthenticated]);
+  
   // PayPal configuration constants from environment variables
   const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "ATKi8kjOWlRBVCGdeAIeMslERAQ2q-u6h3XMCtmqWKIMPYv26yKKTcJpXgYrmiI1GWw80hIlioRrZTIW";
   // Secret key is stored in environment but only used on server-side
@@ -68,30 +83,24 @@ export default function Page() {
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
   
-  // Check URL parameters for plan selection after login redirect
+  // Check for plan in URL params (for when user returns from login)
+  // This should only run once when the component is mounted
   useEffect(() => {
-    // Check if we have URL parameters indicating a redirect from login
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const planParam = urlParams.get('plan');
-      
-      if (planParam) {
-        // Find the plan in our pricing plans
-        const plan = pricingPlans.find(p => p.name === planParam);
-        if (plan && plan.name !== 'Free') {
-          // Set the selected plan and open the modal
-          setSelectedPlan(plan.name);
-          setSelectedPlanDetails(plan);
-          setModalOpen(true);
-          
-          // Clean up the URL parameters
-          const url = new URL(window.location.href);
-          url.searchParams.delete('plan');
-          window.history.replaceState({}, '', url);
+    // Only attempt to auto-open modal if user is authenticated
+    if (isAuthenticated) {
+      const planFromParams = searchParams.get("plan");
+      if (planFromParams) {
+        console.log("Found plan in URL params:", planFromParams);
+        const planObj = pricingPlans.find(plan => plan.name === planFromParams);
+        if (planObj && planObj.name !== "Free") {
+          // Short timeout to ensure session is fully loaded
+          setTimeout(() => {
+            handleSubscribe(planObj.name);
+          }, 100);
         }
       }
     }
-  }, []);
+  }, []); // Empty dependency array - only run once on mount
   
   // Use the working PayPal subscription plan ID provided
   const SUBSCRIPTION_PLAN_IDS = {
@@ -255,38 +264,59 @@ export default function Page() {
   };
 
   const handleSubscribe = (planName: string) => {
+    console.log("Subscribe clicked for plan:", planName, "- Auth status:", isAuthenticated);
+    
+    // For Free plan, handle differently
     if (planName === "Free") {
-      window.location.href = "/register";
-    } else if (planName === "Pro" || planName === "Enterprise") {
-      // Find the selected plan details
-      const plan = pricingPlans.find(p => p.name === planName);
+      router.push("/auth/signup");
+      return;
+    }
+    
+    // For paid plans, check authentication
+    if (!isAuthenticated) {
+      console.log("Not authenticated, redirecting to login");
+      // Redirect to login page with plan information as query parameter
+      router.push(`/auth/login?plan=${planName}&redirect=${encodeURIComponent("/pricing")}`);
+      return;
+    }
+    
+    console.log("User is authenticated, proceeding with subscription");
+    
+    // Find the selected plan details
+    const planDetails = pricingPlans.find(plan => plan.name === planName);
+    
+    if (planDetails) {
+      // Set the selected plan and its details
+      setSelectedPlan(planName);
+      setSelectedPlanDetails(planDetails);
       
-      if (plan) {
-        // Reset paypal errors and initialized state
-        setPaypalError(null);
-        setPaypalInitialized(false);
-        setSelectedPlan(planName);
-        setSelectedPlanDetails(plan);
-        
-        // Open the subscription modal
-        setModalOpen(true);
-      }
-    } else {
-      // For custom plans
-      window.location.href = "/contact";
+      // Reset PayPal initialization status
+      setPaypalInitialized(false);
+      
+      // Open the subscription modal
+      setModalOpen(true);
+      
+      // PayPal initialization will be triggered when the modal is opened
+      // via the useEffect that watches modalOpen state
     }
   };
 
-  // Initialize PayPal when modal is opened with selected plan
   // Initialize PayPal when conditions are met
   useEffect(() => {
-    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized) {
-      const timer = setTimeout(() => {
-        initializePayPal();
-      }, 300);
-      return () => clearTimeout(timer);
+    // Only initialize when all conditions are met and user is authenticated
+    if (modalOpen && paypalLoaded && selectedPlan && !paypalInitialized && isAuthenticated) {
+      console.log("Initializing PayPal for plan:", selectedPlan);
+      initializePayPal();
     }
-  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized]);
+    // No else clause with redirection - let the CheckoutView handle authentication display
+  }, [modalOpen, paypalLoaded, selectedPlan, paypalInitialized, isAuthenticated]);
+  
+  // This handles the modal closing automatically when user logs out
+  useEffect(() => {
+    if (!isAuthenticated && modalOpen) {
+      setModalOpen(false);
+    }
+  }, [isAuthenticated, modalOpen]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
@@ -495,58 +525,120 @@ export default function Page() {
           setModalOpen(open);
         }}
       >
-        <DialogContent className="sm:max-w-md">
-          {subscriptionSuccess ? (
-            // Success View
-            <>
-              <div className="flex flex-col items-center justify-center py-6">
-                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
-                  <Check className="h-6 w-6 text-green-600" />
-                </div>
-                <DialogTitle className="text-xl font-bold text-center">
-                  Subscription Successful!
-                </DialogTitle>
-                <div className="mt-4 text-center space-y-2">
-                  <p className="text-muted-foreground">
-                    Thank you for subscribing to our {selectedPlanDetails?.name} plan.
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Your subscription ID is: <span className="font-mono bg-muted px-2 py-1 rounded text-xs">{subscriptionId}</span>
-                  </p>
-                  <p className="mt-4 text-sm">
-                    You will be charged ${selectedPlanDetails?.monthlyUsd} monthly for {selectedPlanDetails?.monthlyCoins} coins.
-                  </p>
-                </div>
-              </div>
-              <DialogFooter className="sm:justify-center">
-                <Button 
-                  onClick={() => {
-                    setModalOpen(false);
-                    // Could redirect to dashboard or account page
-                  }}
-                  className="mt-4"
-                >
-                  Continue to Dashboard
-                </Button>
-              </DialogFooter>
-            </>
-          ) : (
-            // Checkout View using the CheckoutView component
-            <CheckoutView
-              selectedPlan={selectedPlan}
-              selectedPlanDetails={selectedPlanDetails}
-              paypalError={paypalError}
-              onClose={() => setModalOpen(false)}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
-      
-      {/* PayPal Subscription Script */}
-      <Script
-        src={`https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&vault=true&intent=subscription&currency=USD&components=buttons,funding-eligibility&commit=true&debug=true`}
-        data-sdk-integration-source="button-factory"
-        strategy="lazyOnload"
+        Contact Us
+      </Button>
+    </CardFooter>
+  </Card>
+</div>
+
+<div className="mt-12 text-center">
+  <h2 className="text-2xl font-semibold mb-4">
+    Frequently Asked Questions
+  </h2>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto text-left">
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">
+          Can I upgrade or downgrade my plan?
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p>
+          Yes, you can change your plan at any time. Changes will be
+          applied at the start of your next billing cycle.
+        </p>
+      </CardContent>
+    </Card>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">
+          What payment methods do you accept?
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p>
+          We accept all major credit cards and PayPal for payment.
+        </p>
+      </CardContent>
+    </Card>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">
+          Is there a limit to how many subtitles I can download?
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p>
+          Each plan provides a different level of service at different price points. Free users pay $0/month,
+          Pro users pay $9.99/month, and Enterprise users pay $29.90/month.
+          The price is based on the features and extraction volume you need.
+        </p>
+      </CardContent>
+    </Card>
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">
+          Are all subtitle formats available on all plans?
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p>
+          Yes, all plans including the Free plan have access to all subtitle formats and full language support.
+          The difference between plans is primarily the number of coins provided each month.
+        </p>
+      </CardContent>
+    </Card>
+  </div>
+</div>
+
+<footer className="text-center text-sm text-muted-foreground">
+  <p>
+    {new Date().getFullYear()} FetchSub.com - YouTube Subtitle
+    Downloader
+  </p>
+</footer>
+
+{/* Subscription Modal Dialog */}
+<Dialog 
+  open={modalOpen} 
+  onOpenChange={(open) => {
+    // Reset success state when closing modal
+    if (!open) {
+      setSubscriptionSuccess(false);
+      setSubscriptionId(null);
+    }
+    setModalOpen(open);
+  }}
+>
+  <DialogContent className="sm:max-w-md">
+    <PaymentModal 
+      isOpen={modalOpen}
+      onClose={() => setModalOpen(false)}
+      planName={selectedPlan}
+      planDetails={selectedPlanDetails}
+      paypalLoaded={paypalLoaded}
+      paypalError={paypalError}
+      subscriptionSuccess={subscriptionSuccess}
+      subscriptionId={subscriptionId}
+      onInitializePayPal={initializePayPal}
+    />
+  </DialogContent>
+</Dialog>
+
+{/* PayPal Subscription Script */}
+<Script
+  src={`https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&vault=true&intent=subscription&currency=USD&components=buttons,funding-eligibility&commit=true&debug=true`}
+  data-sdk-integration-source="button-factory"
+  strategy="lazyOnload"
+  onLoad={() => {
+    console.log("PayPal SDK loaded successfully");
+    setPaypalLoaded(true);
+  }}
+  onError={(e) => {
+    console.error("PayPal SDK failed to load:", e);
+    setPaypalError("Failed to load PayPal. Please refresh the page and try again.");
+  }}
+/>
         onLoad={() => {
           console.log("PayPal SDK loaded successfully");
           setPaypalLoaded(true);
