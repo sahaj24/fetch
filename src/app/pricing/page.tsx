@@ -102,21 +102,40 @@ export default function Page() {
   const initializePayPal = () => {
     if (window.paypal && document.getElementById('paypal-button-container-P-8TR81148EW103371JNA5JSCA')) {
       try {
+        console.log('PayPal SDK loaded, initializing buttons...');
         window.paypal.Buttons({
           style: {
             shape: 'rect',
-            color: 'black',
+            color: 'blue', // Changed from black to blue for better visibility
             layout: 'vertical',
-            label: 'paypal'
+            label: 'subscribe'
+          },
+          onInit: function(data: any, actions: any) {
+            console.log('PayPal button initialized');
           },
           createSubscription: function(data: any, actions: any) {
+            console.log('Creating subscription...');
             return actions.subscription.create({
               /* Creates the subscription */
-              plan_id: 'P-8TR81148EW103371JNA5JSCA'
+              plan_id: 'P-8TR81148EW103371JNA5JSCA',
+              application_context: {
+                shipping_preference: 'NO_SHIPPING'
+              }
             });
           },
           onApprove: function(data: any, actions: any) {
-            alert(data.subscriptionID); // You can add optional success message for the subscriber here
+            console.log('Subscription approved:', data);
+            alert('Subscription successful! Your subscription ID is: ' + data.subscriptionID);
+            // Redirect to success page or show success message
+            window.location.href = '/payment/success?subscription_id=' + data.subscriptionID;
+          },
+          onError: function(err: any) {
+            console.error('PayPal error:', err);
+            alert('There was an error processing your subscription. Please try again or contact support.');
+            setPaypalError(true);
+          },
+          onCancel: function(data: any) {
+            console.log('Subscription cancelled');
           }
         }).render('#paypal-button-container-P-8TR81148EW103371JNA5JSCA');
         setPaypalLoaded(true);
@@ -124,6 +143,9 @@ export default function Page() {
         console.error('Failed to render PayPal button:', error);
         setPaypalError(true);
       }
+    } else {
+      console.error('PayPal SDK not loaded or container not found');
+      setPaypalError(true);
     }
   };
   
@@ -342,7 +364,7 @@ export default function Page() {
       
       {/* PayPal Subscription Script */}
       <Script
-        src="https://www.paypal.com/sdk/js?client-id=AWBrlsaWcy6uSafXspmvBDMmapaYYSgocsGz2wBawAewf2XhO2tPxfsHXqgt09eOOq94hWhvr4fcH_Ts&vault=true&intent=subscription"
+        src={`https://www.paypal.com/sdk/js?client-id=${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || 'AWBrlsaWcy6uSafXspmvBDMmapaYYSgocsGz2wBawAewf2XhO2tPxfsHXqgt09eOOq94hWhvr4fcH_Ts'}&vault=true&intent=subscription&currency=USD`}
         data-sdk-integration-source="button-factory"
         strategy="lazyOnload"
         onLoad={initializePayPal}
