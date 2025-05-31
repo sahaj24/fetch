@@ -63,28 +63,6 @@ export default function Page() {
   const PAYPAL_URL = process.env.PAYPAL_URL || "https://api.sandbox.paypal.com";
   const PAYPAL_MODE = process.env.NEXT_PUBLIC_PAYPAL_MODE || "sandbox";
   
-  // Store selected plan in session storage before redirecting to login
-  const storeSelectedPlan = (planName: string): void => {
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('selectedPlanBeforeLogin', planName);
-    }
-  };
-  
-  // Check for stored plan in session storage
-  const [storedPlan, setStoredPlan] = useState<string | null>(null);
-  
-  // Initialize stored plan from session storage on component mount
-  useEffect(() => {
-    if (typeof window !== 'undefined' && user) {
-      const plan = sessionStorage.getItem('selectedPlanBeforeLogin');
-      if (plan) {
-        setStoredPlan(plan);
-        // Clear it after reading
-        sessionStorage.removeItem('selectedPlanBeforeLogin');
-      }
-    }
-  }, [user]);
-  
   // State variables for PayPal integration and modal
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [paypalError, setPaypalError] = useState<string | null>(null);
@@ -94,6 +72,17 @@ export default function Page() {
   const [selectedPlanDetails, setSelectedPlanDetails] = useState<PricingPlan | null>(null);
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
+  
+  // Store selected plan in localStorage before redirecting to login
+  const storeSelectedPlan = (planName: string): void => {
+    if (typeof window !== 'undefined') {
+      console.log('Storing plan in localStorage:', planName);
+      localStorage.setItem('selectedPlanBeforeLogin', planName);
+    }
+  };
+  
+  // Check for stored plan in localStorage
+  const [storedPlan, setStoredPlan] = useState<string | null>(null);
   
   // Use the working PayPal subscription plan ID provided
   const SUBSCRIPTION_PLAN_IDS = {
@@ -152,6 +141,33 @@ export default function Page() {
       buttonText: "Contact Sales",
     },
   ];
+  
+  // Initialize stored plan from localStorage on component mount
+  useEffect(() => {
+    console.log('Auth state changed. User:', user ? 'Logged in' : 'Not logged in');
+    
+    if (typeof window !== 'undefined') {
+      const plan = localStorage.getItem('selectedPlanBeforeLogin');
+      console.log('Checking localStorage for plan:', plan);
+      
+      if (plan && user) {
+        console.log('Found stored plan after login:', plan);
+        setStoredPlan(plan);
+        
+        // Open modal immediately with this plan
+        const planDetails = pricingPlans.find(p => p.name === plan);
+        if (planDetails) {
+          console.log('Opening modal with plan:', plan);
+          setSelectedPlan(plan);
+          setSelectedPlanDetails(planDetails);
+          setModalOpen(true);
+          
+          // Clear it after opening modal
+          localStorage.removeItem('selectedPlanBeforeLogin');
+        }
+      }
+    }
+  }, [user, pricingPlans]);
 
   // Initialize PayPal button when script loads
   // Debug mode - set to true to see helpful information about subscription plans
@@ -331,9 +347,46 @@ export default function Page() {
           <h1 className="text-4xl font-bold tracking-tight">
             Simple, Transparent Pricing
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
             Choose the plan that's right for you. All plans include access to
-            our core subtitle extraction features.
+          </p>
+          
+          {/* Temporary debug button - REMOVE AFTER TESTING */}
+          {user && (
+            <div className="mb-8 flex justify-center gap-4">
+              <Button 
+                onClick={() => {
+                  const plan = pricingPlans.find(p => p.name === "Pro");
+                  if (plan) {
+                    setSelectedPlan("Pro");
+                    setSelectedPlanDetails(plan);
+                    setModalOpen(true);
+                    console.log("Force opening Pro plan modal");
+                  }
+                }}
+                className="bg-amber-500 hover:bg-amber-600 text-white"
+              >
+                Test Pro Plan Modal
+              </Button>
+              <Button 
+                onClick={() => {
+                  const plan = pricingPlans.find(p => p.name === "Enterprise");
+                  if (plan) {
+                    setSelectedPlan("Enterprise");
+                    setSelectedPlanDetails(plan);
+                    setModalOpen(true);
+                    console.log("Force opening Enterprise plan modal");
+                  }
+                }}
+                className="bg-purple-500 hover:bg-purple-600 text-white"
+              >
+                Test Enterprise Plan Modal
+              </Button>
+            </div>
+          )}
+          
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+            Our core subtitle extraction features.
           </p>
         </div>
 
