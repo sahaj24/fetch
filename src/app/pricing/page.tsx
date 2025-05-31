@@ -77,7 +77,12 @@ export default function Page() {
   const storeSelectedPlan = (planName: string): void => {
     if (typeof window !== 'undefined') {
       console.log('Storing plan in localStorage:', planName);
-      localStorage.setItem('selectedPlanBeforeLogin', planName);
+      // Use a timestamp to know when this was set
+      const planData = JSON.stringify({
+        plan: planName,
+        timestamp: new Date().getTime()
+      });
+      localStorage.setItem('selectedPlanBeforeLogin', planData);
     }
   };
   
@@ -146,28 +151,50 @@ export default function Page() {
   useEffect(() => {
     console.log('Auth state changed. User:', user ? 'Logged in' : 'Not logged in');
     
-    if (typeof window !== 'undefined') {
-      const plan = localStorage.getItem('selectedPlanBeforeLogin');
-      console.log('Checking localStorage for plan:', plan);
-      
-      if (plan && user) {
-        console.log('Found stored plan after login:', plan);
-        setStoredPlan(plan);
+    // Only proceed if the user is logged in and not in the loading state
+    if (typeof window !== 'undefined' && user && !isLoading) {
+      try {
+        const storedData = localStorage.getItem('selectedPlanBeforeLogin');
+        console.log('Checking localStorage for plan data:', storedData);
         
-        // Open modal immediately with this plan
-        const planDetails = pricingPlans.find(p => p.name === plan);
-        if (planDetails) {
-          console.log('Opening modal with plan:', plan);
-          setSelectedPlan(plan);
-          setSelectedPlanDetails(planDetails);
-          setModalOpen(true);
+        if (storedData) {
+          const parsedData = JSON.parse(storedData);
+          console.log('Parsed plan data:', parsedData);
           
-          // Clear it after opening modal
-          localStorage.removeItem('selectedPlanBeforeLogin');
+          // Make sure the data is recent (within the last 5 minutes)
+          const now = new Date().getTime();
+          const fiveMinutesAgo = now - (5 * 60 * 1000);
+          
+          if (parsedData.timestamp && parsedData.timestamp > fiveMinutesAgo) {
+            const planName = parsedData.plan;
+            console.log('Found valid stored plan after login:', planName);
+            
+            // Find the plan details
+            const planDetails = pricingPlans.find(p => p.name === planName);
+            if (planDetails) {
+              console.log('Opening modal with plan:', planName);
+              
+              // Set timeout to ensure all rendering is complete
+              setTimeout(() => {
+                setSelectedPlan(planName);
+                setSelectedPlanDetails(planDetails);
+                setModalOpen(true);
+              }, 500);
+              
+              // Clear it after opening modal
+              localStorage.removeItem('selectedPlanBeforeLogin');
+            }
+          } else {
+            console.log('Stored plan data is too old, ignoring');
+            localStorage.removeItem('selectedPlanBeforeLogin');
+          }
         }
+      } catch (error) {
+        console.error('Error parsing stored plan data:', error);
+        localStorage.removeItem('selectedPlanBeforeLogin');
       }
     }
-  }, [user, pricingPlans]);
+  }, [user, pricingPlans, isLoading]);
 
   // Initialize PayPal button when script loads
   // Debug mode - set to true to see helpful information about subscription plans
@@ -279,11 +306,14 @@ export default function Page() {
   };
 
   const handleSubscribe = (planName: string) => {
+    console.log(`Subscribe button clicked for ${planName} plan`);
+    
     if (planName === "Free") {
-      window.location.href = "/register";
+      window.location.href = "/auth/register";
     } else if (planName === "Pro" || planName === "Enterprise") {
       // Check if user is logged in
       if (!user) {
+        console.log('User not logged in, storing plan and redirecting to login');
         // Store the selected plan before redirecting
         storeSelectedPlan(planName);
         // Redirect to login page with callback URL
@@ -291,6 +321,7 @@ export default function Page() {
         return;
       }
       
+      console.log('User is logged in, opening modal directly');
       // Find the selected plan details
       const plan = pricingPlans.find(p => p.name === planName);
       
@@ -328,15 +359,16 @@ export default function Page() {
       }
     }
   }, [user, storedPlan, pricingPlans]);
-
+  
+  // Initialize PayPal when modal opens and script is loaded
   useEffect(() => {
-    // When modal is open, selected plan exists, PayPal is loaded, and user is logged in, initialize the buttons
+    // Only try to initialize PayPal if modal is open, script is loaded, and button isn't already initialized
     if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized && user) {
-      // Small timeout to ensure DOM is updated with the button container
-      const timer = setTimeout(() => {
+      console.log('Modal is open and PayPal SDK is loaded, initializing PayPal button');
+      // Add a small delay to make sure the modal DOM is fully rendered
+      setTimeout(() => {
         initializePayPal();
-      }, 300);
-      return () => clearTimeout(timer);
+      }, 500);
     }
   }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user]);
 
@@ -649,10 +681,15 @@ export default function Page() {
                     <p className="text-sm">You need to be logged in to subscribe to a plan.</p>
                     <Button 
                       onClick={() => {
+                        console.log('Login button clicked in modal');
                         if (selectedPlan) {
+                          console.log('Storing selected plan before redirect:', selectedPlan);
                           storeSelectedPlan(selectedPlan);
                         }
-                        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
+                        // Use a short delay to ensure the localStorage is set before navigation
+                        setTimeout(() => {
+                          router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
+                        }, 100);
                       }}
                       className="w-full bg-primary hover:bg-primary/90"
                     >
