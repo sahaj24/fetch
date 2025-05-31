@@ -916,7 +916,6 @@ export async function POST(req: NextRequest) {
 
       // Deduct coins for successfully processed videos
       if (userId && processingStats.processedVideos > 0) {
-        // DIRECT APPROACH: Implement coin deduction directly here to avoid UUID format issues
         try {
           console.log(`Attempting coin handling for user ${userId}`);
           
@@ -947,28 +946,30 @@ export async function POST(req: NextRequest) {
             console.log(`Cost = ${cost} coins`);
           }
           
-
           // Check if this is an anonymous user with free coins
           const isAnonymousUser = userId?.startsWith('anonymous-');
 
           if (isAnonymousUser) {
-            console.log(`Processing for anonymous user with free coins`);
-            // No need to deduct from database for anonymous users
-            // We'll just track usage client-side with localStorage
+            console.log(`Anonymous user ${userId} - not deducting coins`);
+            // Continue processing without coin deduction for anonymous users
           } else {
-            // Use the new utility function to deduct coins
-            const operationType = processingStats.processedVideos > 1 ? 'BATCH_EXTRACT' : 'EXTRACT_SUBTITLES';
-            const success = await deductCoinsForOperation(userId, operationType, cost);
+            // For authenticated users, use the deductCoinsForOperation utility
+            console.log(`Deducting ${cost} coins for authenticated user ${userId}`);
+            // Use a valid OperationType from the defined type
+            const operationType = inputType === "url" ? "EXTRACT_SUBTITLES" : "BATCH_EXTRACT";
+            const deductionSuccess = await deductCoinsForOperation(userId, operationType, cost);
             
-            if (success) {
-              console.log(`✅ Coin deduction successful: ${cost} coins deducted for ${operationType}`);
-            } else {
-              console.error(`❌ Failed to deduct ${cost} coins for user ${userId}`);
-              // Continue processing anyway - we'll still provide the results
-              // but log the error for monitoring
+            if (!deductionSuccess) {
+              console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
+              return NextResponse.json(
+                { error: "Insufficient coins for this operation" },
+                { status: 402 }
+              );
             }
+            
+            console.log(`✅ Successfully deducted ${cost} coins from user ${userId}`);
           }
-          } catch (deductError) {
+        } catch (deductError) {
             console.error(`Error in coin handling for user ${userId}:`, deductError);
           }
       } else {
@@ -1010,7 +1011,6 @@ export async function POST(req: NextRequest) {
         
         // Deduct coins for successfully processed videos
         if (userId && processingStats.processedVideos > 0) {
-          // DIRECT APPROACH: Implement coin deduction directly here to avoid UUID format issues
           try {
             console.log(`Attempting coin deduction for CSV processing for user ${userId}`);
             
@@ -1033,11 +1033,12 @@ export async function POST(req: NextRequest) {
             if (success) {
               console.log(`✅ Coin deduction successful: ${cost} coins deducted for CSV processing`);
             } else {
-              console.error(`❌ Failed to deduct ${cost} coins for user ${userId} for CSV processing`);
-              // Continue processing anyway - we'll still provide the results
-              // but log the error for monitoring
+              console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
+              return NextResponse.json(
+                { error: "Insufficient coins for this operation" },
+                { status: 402 }
+              );
             }
-            
           } catch (deductError) {
             console.error(`Error in direct coin deduction for user ${userId}:`, deductError);
           }

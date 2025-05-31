@@ -119,10 +119,10 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
 
     console.log(`Attempting to deduct ${coinsToDeduct} coins for user ${userId} for operation ${operationType}`);
 
-    // First get the current balance
+    // First get the current balance and subscription tier
     const { data: userData, error: fetchError } = await supabase
       .from('user_coins')
-      .select('balance, total_spent')
+      .select('balance, total_spent, subscription_tier')
       .eq('user_id', userId)
       .single();
     
@@ -138,8 +138,12 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
 
     const currentBalance = userData.balance || 0;
     const totalSpent = userData.total_spent || 0;
+    const subscriptionTier = userData.subscription_tier || 'FREE';
+    
+    console.log(`User ${userId} has subscription tier: ${subscriptionTier}, balance: ${currentBalance}`);
 
-    // Check if the user has enough coins
+    // Always check if the user has enough coins, regardless of subscription tier
+    // This ensures Pro users also have their coins deducted properly
     if (currentBalance < coinsToDeduct) {
       console.error(`User ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
       return false;
