@@ -185,10 +185,8 @@ export default function Page() {
   const DEBUG_MODE = true;
 
   const initializePayPal = () => {
-    // Prevent re-initialization if already done 
-    if (paypalInitialized) {
-      return;
-    }
+    console.log('initializePayPal called');
+    
     // Make sure user is logged in
     if (!user) {
       const errorMsg = "You must be logged in to subscribe. Please log in and try again.";
@@ -196,16 +194,22 @@ export default function Page() {
       setPaypalError(errorMsg);
       return;
     }
-    if (!window.paypal) {
+    
+    // Check if PayPal SDK is loaded
+    if (typeof window === 'undefined' || !window.paypal) {
       const errorMsg = "PayPal SDK not loaded yet. Please try again in a moment.";
       console.error(errorMsg);
       setPaypalError(errorMsg);
       return;
     }
     
-    const buttonContainer = document.getElementById(`paypal-button-${selectedPlan}`);
+    // Find the container for the button
+    const buttonContainerId = `paypal-button-${selectedPlan}`;
+    console.log('Looking for button container:', buttonContainerId);
+    const buttonContainer = document.getElementById(buttonContainerId);
+    
     if (!selectedPlan || !buttonContainer) {
-      const errorMsg = "Button container not found in DOM.";
+      const errorMsg = `Button container '${buttonContainerId}' not found in DOM.`;
       console.error(errorMsg);
       setPaypalError(errorMsg);
       return;
@@ -225,17 +229,17 @@ export default function Page() {
       // In debug mode, show a message about the plan ID
       if (DEBUG_MODE) {
         console.log(`Using plan ID: ${planId} for ${selectedPlan} plan`);
+        console.log('PayPal client ID:', PAYPAL_CLIENT_ID);
       }
       
+      // Create the PayPal buttons
       const buttons = window.paypal.Buttons({
         style: {
           shape: "rect",
-          color: "blue",
+          color: "black",
           layout: "vertical",
           label: "subscribe",
-          height: 45,
-          // Make the button look nicer in the modal
-          tagline: false,
+          tagline: false
         },
         createSubscription: (data: any, actions: any) => {
           console.log(`Creating ${selectedPlan} subscription with plan ID: ${planId}`);
@@ -275,17 +279,19 @@ export default function Page() {
         },
       });
       
-      if (!buttons.isEligible()) {
-        console.error("PayPal Buttons are not eligible");
-        setPaypalError("PayPal integration not available. Please try a different payment method.");
-        return;
-      }
-      
-      buttons.render(`#paypal-button-${selectedPlan}`);
-      setPaypalInitialized(true);
+      // Render the PayPal button in the container
+      buttons.render(buttonContainer).then(() => {
+        // Mark as initialized
+        setPaypalInitialized(true);
+        setPaypalError(null);
+        console.log('PayPal buttons rendered successfully!');
+      }).catch((error: any) => {
+        console.error('PayPal button render error:', error);
+        setPaypalError('Failed to render PayPal button. Please try again.');
+      });
     } catch (error: any) {
-      console.error("PayPal button initialization error:", error);
-      setPaypalError(`PayPal initialization error: ${error.message || 'Unknown error'}`);
+      console.error('PayPal initialization error:', error);
+      setPaypalError(`Error: ${error.message || 'Unknown error'}`);
     }
   };
 
@@ -330,10 +336,16 @@ export default function Page() {
     // Only try to initialize PayPal if modal is open, script is loaded, and button isn't already initialized
     if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized && user) {
       console.log('Modal is open and PayPal SDK is loaded, initializing PayPal button');
+      // Clear the initialized flag first in case we need to retry
+      setPaypalInitialized(false);
+      
       // Add a small delay to make sure the modal DOM is fully rendered
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        console.log('Initializing PayPal button now...');
         initializePayPal();
-      }, 500);
+      }, 1000);
+      
+      return () => clearTimeout(timer);
     }
   }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user]);
 
@@ -660,10 +672,17 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="bg-white p-4 rounded-lg">
+                    {/* PayPal button container with increased height */}
                     <div 
                       id={`paypal-button-${selectedPlan}`} 
-                      className="rounded-md overflow-hidden mx-auto"
-                    />
+                      className="rounded-md mx-auto min-h-[150px] border border-gray-200 flex justify-center items-center"
+                    >
+                      {!paypalLoaded && (
+                        <div className="text-center">
+                          <p>Loading PayPal...</p>
+                        </div>
+                      )}
+                    </div>
                     {paypalError && (
                       <div className="text-red-500 text-sm text-center mt-2">
                         {paypalError}
@@ -690,20 +709,25 @@ export default function Page() {
         </DialogContent>
       </Dialog>
       
-      {/* PayPal Subscription Script */}
-      <Script
-        src={`https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&vault=true&intent=subscription&currency=USD&components=buttons,funding-eligibility&commit=true&debug=true`}
-        data-sdk-integration-source="button-factory"
-        strategy="lazyOnload"
-        onLoad={() => {
-          console.log("PayPal SDK loaded successfully");
-          setPaypalLoaded(true);
-        }}
-        onError={(e) => {
-          console.error("PayPal SDK failed to load:", e);
-          setPaypalError("Failed to load PayPal. Please refresh the page and try again.");
-        }}
-      />
+      {/* PayPal Subscription Script - load only when needed */}
+      {modalOpen && user && (
+        <Script
+          src={`https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&vault=true&intent=subscription&currency=USD`}
+          strategy="afterInteractive"
+          onLoad={() => {
+            console.log('PayPal script loaded successfully');
+            setPaypalLoaded(true);
+            // Initialize immediately after loading
+            setTimeout(() => {
+              initializePayPal();
+            }, 500);
+          }}
+          onError={(e) => {
+            console.error('Failed to load PayPal script:', e);
+            setPaypalError('Failed to load PayPal payment system. Please try again later.');
+          }}
+        />
+      )}
     </main>
   );
 }
