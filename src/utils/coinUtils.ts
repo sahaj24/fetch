@@ -109,6 +109,8 @@ export async function getUserCoinsBalance(userId: string): Promise<number | null
 /**
  * Deducts coins from a user's balance when they perform an operation
  * Returns true if successful, false if the user doesn't have enough coins or if there's an error
+ * 
+ * IMPORTANT: This function handles deduction for ALL subscription tiers including Pro users
  */
 export async function deductCoinsForOperation(userId: string, operationType: OperationType, coinsToDeduct: number): Promise<boolean> {
   try {
@@ -117,9 +119,11 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       return false;
     }
 
-    console.log(`Attempting to deduct ${coinsToDeduct} coins for user ${userId} for operation ${operationType}`);
+    console.log(`[DEBUG] Attempting to deduct ${coinsToDeduct} coins for user ${userId} for operation ${operationType}`);
+    console.log(`[DEBUG] User ID type: ${typeof userId}, value: ${userId}`);
 
     // First get the current balance and subscription tier
+    console.log(`[DEBUG] Fetching user data from 'user_coins' table for user_id: ${userId}`);
     const { data: userData, error: fetchError } = await supabase
       .from('user_coins')
       .select('balance, total_spent, subscription_tier')
@@ -127,47 +131,83 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       .single();
     
     if (fetchError) {
-      console.error('Error fetching user coins data:', fetchError);
+      console.error('[DEBUG] Error fetching user coins data:', fetchError);
       return false;
     }
 
     if (!userData) {
-      console.error('User coins record not found');
+      console.error('[DEBUG] User coins record not found for user_id:', userId);
+      // Check if user record exists at all
+      const { data: userCheck } = await supabase
+        .from('user_coins')
+        .select('user_id')
+        .limit(5);
+      console.log('[DEBUG] Sample user_coins records:', userCheck);
       return false;
     }
+    
+    console.log('[DEBUG] User data fetched successfully:', userData);
 
     const currentBalance = userData.balance || 0;
     const totalSpent = userData.total_spent || 0;
     const subscriptionTier = userData.subscription_tier || 'FREE';
     
-    console.log(`User ${userId} has subscription tier: ${subscriptionTier}, balance: ${currentBalance}`);
-
+    console.log(`[DEBUG] User ${userId} has subscription tier: ${subscriptionTier}, balance: ${currentBalance}`);
+    
+    // CRITICAL FIX: Force uppercase for subscription tier to ensure consistent comparison
+    const normalizedTier = subscriptionTier.toUpperCase();
+    console.log(`[DEBUG] Normalized subscription tier: ${normalizedTier}`);
+    
+    // Verify this operation should deduct coins for this subscription tier
+    // For now, ALL tiers (FREE, PRO, ENTERPRISE) should have coins deducted
+    const validTiers = ['FREE', 'PRO', 'ENTERPRISE']; 
+    
+    if (!validTiers.includes(normalizedTier)) {
+      console.warn(`[DEBUG] Unknown subscription tier: ${normalizedTier}, defaulting to FREE`);
+    }
+    
     // Always check if the user has enough coins, regardless of subscription tier
     // This ensures Pro users also have their coins deducted properly
     if (currentBalance < coinsToDeduct) {
-      console.error(`User ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
+      console.error(`[DEBUG] User ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
       return false;
     }
 
     const newBalance = currentBalance - coinsToDeduct;
     const newTotalSpent = totalSpent + coinsToDeduct;
 
-    // Update the user's coin balance
+    console.log(`[DEBUG] Updating user ${userId} coins: balance ${currentBalance} -> ${newBalance}, total_spent ${totalSpent} -> ${newTotalSpent}`);
+    console.log(`[DEBUG] Subscription tier remains: ${subscriptionTier}`);
+    
+    // Include the subscription tier in the update to ensure it's still set correctly
+    // This is an important fix to make sure the tier doesn't get lost or reset
+    const updatePayload = {
+      balance: newBalance,
+      total_spent: newTotalSpent,
+      // Keep the existing subscription tier but ensure it's normalized
+      subscription_tier: normalizedTier
+    };
+    
+    console.log(`[DEBUG] Database update payload:`, updatePayload);
+    
     const { error: updateError } = await supabase
       .from('user_coins')
-      .update({
-        balance: newBalance,
-        total_spent: newTotalSpent
-      })
+      .update(updatePayload)
       .eq('user_id', userId);
     
     if (updateError) {
-      console.error('Error updating user coins balance:', updateError);
+      console.error('[DEBUG] Error updating user coins balance:', updateError);
+      console.error('[DEBUG] Update error details:', JSON.stringify(updateError));
       return false;
     }
+    
+    console.log(`[DEBUG] Database update successful for user ${userId}`);
 
     // Record the transaction
     const transactionId = `${operationType.toLowerCase()}_${Date.now()}`;
+    console.log(`[DEBUG] Creating transaction record with ID: ${transactionId} in coin_transactions table`);
+    console.log(`[DEBUG] Transaction details: user_id=${userId}, type=SPENT, amount=${-coinsToDeduct}`);
+    
     const { error: transError } = await supabase
       .from('coin_transactions')
       .insert({
@@ -180,11 +220,14 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       });
       
     if (transError) {
-      console.error('Error recording deduction transaction:', transError);
+      console.error('[DEBUG] Error recording deduction transaction:', transError);
+      console.error('[DEBUG] Transaction error details:', JSON.stringify(transError));
       // Continue anyway since the coins were deducted
+    } else {
+      console.log(`[DEBUG] Successfully recorded transaction ${transactionId} in coin_transactions table`);
     }
 
-    console.log(`Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${newBalance}`);
+    console.log(`[DEBUG] Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${newBalance}`);
     return true;
   } catch (error) {
     console.error('Error in deductCoinsForOperation:', error);
