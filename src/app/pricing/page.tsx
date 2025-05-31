@@ -63,9 +63,27 @@ export default function Page() {
   const PAYPAL_URL = process.env.PAYPAL_URL || "https://api.sandbox.paypal.com";
   const PAYPAL_MODE = process.env.NEXT_PUBLIC_PAYPAL_MODE || "sandbox";
   
-  // Check for plan parameter in URL (when returning from login)
-  const searchParams = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
-  const planFromUrl = searchParams.get('plan');
+  // Store selected plan in session storage before redirecting to login
+  const storeSelectedPlan = (planName: string): void => {
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem('selectedPlanBeforeLogin', planName);
+    }
+  };
+  
+  // Check for stored plan in session storage
+  const [storedPlan, setStoredPlan] = useState<string | null>(null);
+  
+  // Initialize stored plan from session storage on component mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && user) {
+      const plan = sessionStorage.getItem('selectedPlanBeforeLogin');
+      if (plan) {
+        setStoredPlan(plan);
+        // Clear it after reading
+        sessionStorage.removeItem('selectedPlanBeforeLogin');
+      }
+    }
+  }, [user]);
   
   // State variables for PayPal integration and modal
   const [paypalLoaded, setPaypalLoaded] = useState(false);
@@ -250,8 +268,10 @@ export default function Page() {
     } else if (planName === "Pro" || planName === "Enterprise") {
       // Check if user is logged in
       if (!user) {
+        // Store the selected plan before redirecting
+        storeSelectedPlan(planName);
         // Redirect to login page with callback URL
-        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(planName)}`);
+        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
         return;
       }
       
@@ -274,31 +294,24 @@ export default function Page() {
     }
   };
 
-  // Handle automatic modal opening when returning from login with plan parameter
+  // Handle automatic modal opening when returning from login with stored plan
   useEffect(() => {
-    // Only proceed if the user is logged in and there's a plan parameter in the URL
-    if (user && planFromUrl && (planFromUrl === "Pro" || planFromUrl === "Enterprise")) {
-      const plan = pricingPlans.find(p => p.name === planFromUrl);
+    // Only proceed if the user is logged in and there's a stored plan
+    if (user && storedPlan && (storedPlan === "Pro" || storedPlan === "Enterprise")) {
+      const plan = pricingPlans.find(p => p.name === storedPlan);
       
       if (plan) {
         // Reset paypal errors and initialized state
         setPaypalError(null);
         setPaypalInitialized(false);
-        setSelectedPlan(planFromUrl);
+        setSelectedPlan(storedPlan);
         setSelectedPlanDetails(plan);
         
         // Open the subscription modal
         setModalOpen(true);
-        
-        // Remove the plan parameter from the URL to prevent reopening on refresh
-        if (typeof window !== 'undefined') {
-          const url = new URL(window.location.href);
-          url.searchParams.delete('plan');
-          window.history.replaceState({}, document.title, url.toString());
-        }
       }
     }
-  }, [user, planFromUrl, pricingPlans]);
+  }, [user, storedPlan, pricingPlans]);
 
   useEffect(() => {
     // When modal is open, selected plan exists, PayPal is loaded, and user is logged in, initialize the buttons
@@ -583,7 +596,10 @@ export default function Page() {
                     <p className="text-sm">You need to be logged in to subscribe to a plan.</p>
                     <Button 
                       onClick={() => {
-                        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(selectedPlan || '')}`);
+                        if (selectedPlan) {
+                          storeSelectedPlan(selectedPlan);
+                        }
+                        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
                       }}
                       className="w-full bg-primary hover:bg-primary/90"
                     >
