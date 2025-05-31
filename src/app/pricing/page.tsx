@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Script from "next/script";
+import { useRouter } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
 
 // Define PayPal on window object for TypeScript
 declare global {
@@ -57,6 +59,10 @@ export default function Page() {
   const PAYPAL_URL = process.env.PAYPAL_URL || "https://api.sandbox.paypal.com";
   const PAYPAL_MODE = process.env.NEXT_PUBLIC_PAYPAL_MODE || "sandbox";
   
+  // Auth context for checking user authentication
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
   // State variables for PayPal integration and modal
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [paypalError, setPaypalError] = useState<string | null>(null);
@@ -66,6 +72,7 @@ export default function Page() {
   const [selectedPlanDetails, setSelectedPlanDetails] = useState<PricingPlan | null>(null);
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
+  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   
   // Use the working PayPal subscription plan ID provided
   const SUBSCRIPTION_PLAN_IDS = {
@@ -232,6 +239,18 @@ export default function Page() {
     if (planName === "Free") {
       window.location.href = "/register";
     } else if (planName === "Pro" || planName === "Enterprise") {
+      // Check if user is authenticated
+      if (!user) {
+        // User is not logged in, store the plan and show auth prompt
+        setSelectedPlan(planName);
+        const plan = pricingPlans.find(p => p.name === planName);
+        if (plan) {
+          setSelectedPlanDetails(plan);
+        }
+        setShowAuthPrompt(true);
+        return;
+      }
+      
       // Find the selected plan details
       const plan = pricingPlans.find(p => p.name === planName);
       
@@ -242,7 +261,7 @@ export default function Page() {
         setSelectedPlan(planName);
         setSelectedPlanDetails(plan);
         
-        // Open the subscription modal
+        // Open the subscription modal for authenticated users
         setModalOpen(true);
       }
     } else {
@@ -251,16 +270,42 @@ export default function Page() {
     }
   };
 
+  // Check URL parameters for selected plan on page load
+  useEffect(() => {
+    if (!isLoading) {
+      // Get plan from URL query params if it exists
+      const urlParams = new URLSearchParams(window.location.search);
+      const planParam = urlParams.get('plan');
+      
+      if (planParam && (planParam === 'Pro' || planParam === 'Enterprise')) {
+        // Set selected plan from URL parameters
+        const plan = pricingPlans.find(p => p.name === planParam);
+        if (plan) {
+          setSelectedPlan(planParam);
+          setSelectedPlanDetails(plan);
+          
+          // If user is authenticated, show payment modal
+          if (user) {
+            setModalOpen(true);
+          } else {
+            // Show auth prompt if not authenticated
+            setShowAuthPrompt(true);
+          }
+        }
+      }
+    }
+  }, [isLoading, user]);
+
   useEffect(() => {
     // When modal is open, selected plan exists, and PayPal is loaded, initialize the buttons
-    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized) {
+    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized && user) {
       // Small timeout to ensure DOM is updated with the button container
       const timer = setTimeout(() => {
         initializePayPal();
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized]);
+  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
@@ -456,6 +501,50 @@ export default function Page() {
           </p>
         </footer>
       </div>
+      
+      {/* Authentication Required Dialog */}
+      <Dialog 
+        open={showAuthPrompt} 
+        onOpenChange={setShowAuthPrompt}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">
+              Authentication Required
+            </DialogTitle>
+            <DialogDescription>
+              <div className="mt-2">
+                <p className="text-muted-foreground">
+                  You need to be logged in to subscribe to a plan.
+                </p>
+              </div>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col space-y-4 p-2">
+            <Button
+              onClick={() => {
+                setShowAuthPrompt(false);
+                const returnUrl = `/pricing?plan=${encodeURIComponent(selectedPlan || '')}`;  
+                router.push(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
+              }}
+              className="w-full"
+            >
+              Log In
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowAuthPrompt(false);
+                const returnUrl = `/pricing?plan=${encodeURIComponent(selectedPlan || '')}`;  
+                router.push(`/auth/signup?returnUrl=${encodeURIComponent(returnUrl)}`);
+              }}
+              className="w-full"
+            >
+              Sign Up
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       
       {/* Subscription Modal Dialog */}
       <Dialog 
