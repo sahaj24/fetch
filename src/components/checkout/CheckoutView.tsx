@@ -32,11 +32,16 @@ export default function CheckoutView({
 }: CheckoutViewProps) {
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated";
+  const isLoading = status === "loading";
   const router = useRouter();
   const [authError, setAuthError] = useState(false);
   
   // Check for authentication status and redirect if not authenticated
   useEffect(() => {
+    // Don't do anything while authentication is being checked
+    if (isLoading) return;
+    
+    // Only redirect if definitely not authenticated
     if (status === "unauthenticated") {
       setAuthError(true);
       // Add a slight delay before redirecting to show the error message
@@ -46,7 +51,7 @@ export default function CheckoutView({
       }, 1500);
       return () => clearTimeout(redirectTimer);
     }
-  }, [status, selectedPlan, router, onClose]);
+  }, [status, selectedPlan, router, onClose, isLoading]);
   
   // Show authentication error if user is not logged in
   if (authError) {

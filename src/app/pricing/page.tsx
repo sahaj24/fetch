@@ -11,6 +11,7 @@ declare global {
     paypal: any;
   }
 }
+
 import {
   Card,
   CardContent,
@@ -58,6 +59,7 @@ export default function Page() {
   const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const isAuthenticated = status === "authenticated";
+  const isLoading = status === "loading";
   
   // PayPal configuration constants from environment variables
   const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "ATKi8kjOWlRBVCGdeAIeMslERAQ2q-u6h3XMCtmqWKIMPYv26yKKTcJpXgYrmiI1GWw80hIlioRrZTIW";
@@ -248,8 +250,13 @@ export default function Page() {
   };
 
   const handleSubscribe = (planName: string) => {
+    // Don't do anything while authentication is being checked
+    if (isLoading) {
+      return;
+    }
+    
     // Check if user is authenticated
-    if (!isAuthenticated) {
+    if (!isAuthenticated && status === "unauthenticated") {
       // Redirect to login page with plan information as query parameter
       router.push(`/auth/login?plan=${planName}&redirect=${encodeURIComponent("/pricing")}`);
       return;
@@ -275,15 +282,18 @@ export default function Page() {
   };
 
   useEffect(() => {
+    // Wait for auth status to be determined
+    if (isLoading) return;
+    
     if (modalOpen && paypalLoaded && selectedPlan && !paypalInitialized && isAuthenticated) {
       console.log("Initializing PayPal for plan:", selectedPlan);
       initializePayPal();
-    } else if (modalOpen && !isAuthenticated) {
-      // Safety check: close modal and redirect if not authenticated
+    } else if (modalOpen && status === "unauthenticated") {
+      // Safety check: only redirect if definitively not authenticated
       setModalOpen(false);
       router.push(`/auth/login?plan=${selectedPlan}&redirect=${encodeURIComponent("/pricing")}`);
     }
-  }, [modalOpen, paypalLoaded, selectedPlan, paypalInitialized, isAuthenticated]);
+  }, [modalOpen, paypalLoaded, selectedPlan, paypalInitialized, isAuthenticated, status, isLoading]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
