@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import Script from "next/script";
 
 // Define PayPal on window object for TypeScript
@@ -18,13 +18,21 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Check, HelpCircle } from "lucide-react";
+import { Check, HelpCircle, X } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 
 interface PricingFeature {
   name: string;
@@ -43,6 +51,28 @@ interface PricingPlan {
 }
 
 export default function Page() {
+  // PayPal configuration constants from environment variables
+  const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "ATKi8kjOWlRBVCGdeAIeMslERAQ2q-u6h3XMCtmqWKIMPYv26yKKTcJpXgYrmiI1GWw80hIlioRrZTIW";
+  // Secret key is stored in environment but only used on server-side
+  const PAYPAL_URL = process.env.PAYPAL_URL || "https://api.sandbox.paypal.com";
+  const PAYPAL_MODE = process.env.NEXT_PUBLIC_PAYPAL_MODE || "sandbox";
+  
+  // State variables for PayPal integration and modal
+  const [paypalLoaded, setPaypalLoaded] = useState(false);
+  const [paypalError, setPaypalError] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [paypalInitialized, setPaypalInitialized] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedPlanDetails, setSelectedPlanDetails] = useState<PricingPlan | null>(null);
+  const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
+  const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
+  
+  // Use the working PayPal subscription plan ID provided
+  const SUBSCRIPTION_PLAN_IDS = {
+    Pro: "P-9TY72104PT817263KNA5N6FY", // Working plan ID 
+    Enterprise: "P-9TY72104PT817263KNA5N6FY" // Using same plan ID for now
+  };
+  
   const pricingPlans: PricingPlan[] = [
     {
       name: "Free",
@@ -95,65 +125,142 @@ export default function Page() {
     },
   ];
 
-  const [paypalLoaded, setPaypalLoaded] = useState(false);
-  const [paypalError, setPaypalError] = useState(false);
-  
   // Initialize PayPal button when script loads
+  // Debug mode - set to true to see helpful information about subscription plans
+  const DEBUG_MODE = true;
+
   const initializePayPal = () => {
-    if (window.paypal && document.getElementById('paypal-button-container-P-8TR81148EW103371JNA5JSCA')) {
-      try {
-        console.log('PayPal SDK loaded, initializing buttons...');
-        window.paypal.Buttons({
-          style: {
-            shape: 'rect',
-            color: 'blue', // Changed from black to blue for better visibility
-            layout: 'vertical',
-            label: 'subscribe'
-          },
-          onInit: function(data: any, actions: any) {
-            console.log('PayPal button initialized');
-          },
-          createSubscription: function(data: any, actions: any) {
-            console.log('Creating subscription...');
-            return actions.subscription.create({
-              /* Creates the subscription */
-              plan_id: 'P-8TR81148EW103371JNA5JSCA',
-              application_context: {
-                shipping_preference: 'NO_SHIPPING'
-              }
-            });
-          },
-          onApprove: function(data: any, actions: any) {
-            console.log('Subscription approved:', data);
-            alert('Subscription successful! Your subscription ID is: ' + data.subscriptionID);
-            // Redirect to success page or show success message
-            window.location.href = '/payment/success?subscription_id=' + data.subscriptionID;
-          },
-          onError: function(err: any) {
-            console.error('PayPal error:', err);
-            alert('There was an error processing your subscription. Please try again or contact support.');
-            setPaypalError(true);
-          },
-          onCancel: function(data: any) {
-            console.log('Subscription cancelled');
-          }
-        }).render('#paypal-button-container-P-8TR81148EW103371JNA5JSCA');
-        setPaypalLoaded(true);
-      } catch (error) {
-        console.error('Failed to render PayPal button:', error);
-        setPaypalError(true);
+    // Prevent re-initialization if already done for this plan
+    if (paypalInitialized) {
+      return;
+    }
+    
+    if (!window.paypal) {
+      const errorMsg = "PayPal SDK not loaded yet. Please try again in a moment.";
+      console.error(errorMsg);
+      setPaypalError(errorMsg);
+      return;
+    }
+    
+    const buttonContainer = document.getElementById(`paypal-button-${selectedPlan}`);
+    if (!selectedPlan || !buttonContainer) {
+      const errorMsg = "Button container not found in DOM.";
+      console.error(errorMsg);
+      setPaypalError(errorMsg);
+      return;
+    }
+
+    try {
+      console.log(`PayPal SDK loaded, initializing button for ${selectedPlan} plan...`);
+
+      // Clear any existing buttons in the container
+      buttonContainer.innerHTML = '';
+      
+      const planId = SUBSCRIPTION_PLAN_IDS[selectedPlan as keyof typeof SUBSCRIPTION_PLAN_IDS];
+      if (!planId) {
+        throw new Error(`No plan ID found for ${selectedPlan}`);
       }
-    } else {
-      console.error('PayPal SDK not loaded or container not found');
-      setPaypalError(true);
+
+      // In debug mode, show a message about the plan ID
+      if (DEBUG_MODE) {
+        console.log(`Using plan ID: ${planId} for ${selectedPlan} plan`);
+      }
+      
+      const buttons = window.paypal.Buttons({
+        style: {
+          shape: "rect",
+          color: "blue",
+          layout: "vertical",
+          label: "subscribe",
+          height: 45,
+          // Make the button look nicer in the modal
+          tagline: false,
+        },
+        createSubscription: (data: any, actions: any) => {
+          console.log(`Creating ${selectedPlan} subscription with plan ID: ${planId}`);
+          
+          return actions.subscription.create({
+            plan_id: planId,
+            application_context: {
+              shipping_preference: "NO_SHIPPING",
+              user_action: "SUBSCRIBE_NOW",
+            },
+          });
+        },
+        onApprove: (data: any, actions: any) => {
+          console.log("Subscription approved:", data);
+          // Update state to show success message in modal
+          setSubscriptionId(data.subscriptionID);
+          setSubscriptionSuccess(true);
+          return actions.redirect(); // Will be handled by our modal now
+        },
+        onError: (err: any) => {
+          console.error("PayPal error:", err);
+          const errorMsg = err.message || 'Unknown error';
+          
+          // Special handling for the "RESOURCE_NOT_FOUND" error
+          if (errorMsg.includes("RESOURCE_NOT_FOUND") || err?.name === "RESOURCE_NOT_FOUND") {
+            setPaypalError(
+              `The subscription plan ID for ${selectedPlan} plan doesn't exist. ` +
+              `Please create a plan in your PayPal dashboard and update your .env.local file.`
+            );
+          } else {
+            setPaypalError(`PayPal error: ${errorMsg}`);
+          }
+        },
+        onCancel: (data: any) => {
+          console.log("Subscription cancelled:", data);
+          setSelectedPlan(null);
+        },
+      });
+      
+      if (!buttons.isEligible()) {
+        console.error("PayPal Buttons are not eligible");
+        setPaypalError("PayPal integration not available. Please try a different payment method.");
+        return;
+      }
+      
+      buttons.render(`#paypal-button-${selectedPlan}`);
+      setPaypalInitialized(true);
+    } catch (error: any) {
+      console.error("PayPal button initialization error:", error);
+      setPaypalError(`PayPal initialization error: ${error.message || 'Unknown error'}`);
     }
   };
-  
+
   const handleSubscribe = (planName: string) => {
-    console.log(`Subscribing to ${planName} plan`);
-    // In a real implementation, this would redirect to a checkout page
-    window.location.href = "/payment";
+    if (planName === "Free") {
+      window.location.href = "/register";
+    } else if (planName === "Pro" || planName === "Enterprise") {
+      // Find the selected plan details
+      const plan = pricingPlans.find(p => p.name === planName);
+      
+      if (plan) {
+        // Reset paypal errors and initialized state
+        setPaypalError(null);
+        setPaypalInitialized(false);
+        setSelectedPlan(planName);
+        setSelectedPlanDetails(plan);
+        
+        // Open the subscription modal
+        setModalOpen(true);
+      }
+    } else {
+      // For custom plans
+      window.location.href = "/contact";
+    }
   };
+
+  useEffect(() => {
+    // When modal is open, selected plan exists, and PayPal is loaded, initialize the buttons
+    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized) {
+      // Small timeout to ensure DOM is updated with the button container
+      const timer = setTimeout(() => {
+        initializePayPal();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
@@ -226,39 +333,27 @@ export default function Page() {
                 </ul>
               </CardContent>
               <CardFooter>
-                {plan.name === "Pro" ? (
-                  <div className="w-full space-y-2">
-                    <div id="paypal-button-container-P-8TR81148EW103371JNA5JSCA" className="w-full min-h-[40px]">
-                      {!paypalLoaded && !paypalError && (
-                        <Button 
-                          className="w-full bg-[#0070ba] hover:bg-[#005ea6]"
-                          disabled={true}
-                        >
-                          <span className="flex items-center justify-center">
-                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                            Loading PayPal...
-                          </span>
-                        </Button>
-                      )}
-                      
-                      {paypalError && (
-                        <Button 
-                          className="w-full"
-                          onClick={() => window.location.href = "/payment"}
-                        >
-                          Subscribe Now
-                        </Button>
-                      )}
-                    </div>
-                  </div>
+                {plan.name === "Free" ? (
+                  <Button
+                    onClick={() => handleSubscribe(plan.name)}
+                    className="w-full"
+                    variant="outline"
+                  >
+                    {plan.buttonText}
+                  </Button>
+                ) : plan.name === "Pro" || plan.name === "Enterprise" ? (
+                  <Button
+                    onClick={() => handleSubscribe(plan.name)}
+                    className={`w-full ${plan.popular ? "bg-primary hover:bg-primary/90" : ""}`}
+                    variant={plan.popular ? "default" : "outline"}
+                  >
+                    {plan.buttonText}
+                  </Button>
                 ) : (
                   <Button
                     onClick={() => handleSubscribe(plan.name)}
                     className="w-full"
-                    variant={plan.popular ? "default" : "outline"}
+                    variant="outline"
                   >
                     {plan.buttonText}
                   </Button>
@@ -356,19 +451,127 @@ export default function Page() {
 
         <footer className="text-center text-sm text-muted-foreground">
           <p>
-            © {new Date().getFullYear()} FetchSub.com - YouTube Subtitle
+            {new Date().getFullYear()} FetchSub.com - YouTube Subtitle
             Downloader
           </p>
         </footer>
       </div>
       
+      {/* Subscription Modal Dialog */}
+      <Dialog 
+        open={modalOpen} 
+        onOpenChange={(open) => {
+          // Reset success state when closing modal
+          if (!open) {
+            setSubscriptionSuccess(false);
+            setSubscriptionId(null);
+          }
+          setModalOpen(open);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          {subscriptionSuccess ? (
+            // Success View
+            <>
+              <div className="flex flex-col items-center justify-center py-6">
+                <div className="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                  <Check className="h-6 w-6 text-green-600" />
+                </div>
+                <DialogTitle className="text-xl font-bold text-center">
+                  Subscription Successful!
+                </DialogTitle>
+                <div className="mt-4 text-center space-y-2">
+                  <p className="text-muted-foreground">
+                    Thank you for subscribing to our {selectedPlanDetails?.name} plan.
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Your subscription ID is: <span className="font-mono bg-muted px-2 py-1 rounded text-xs">{subscriptionId}</span>
+                  </p>
+                  <p className="mt-4 text-sm">
+                    You will be charged ${selectedPlanDetails?.monthlyUsd} monthly for {selectedPlanDetails?.monthlyCoins} coins.
+                  </p>
+                </div>
+              </div>
+              <DialogFooter className="sm:justify-center">
+                <Button 
+                  onClick={() => {
+                    setModalOpen(false);
+                    // Could redirect to dashboard or account page
+                  }}
+                  className="mt-4"
+                >
+                  Continue to Dashboard
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            // Checkout View
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold">
+                  {selectedPlanDetails ? `Subscribe to ${selectedPlanDetails.name} Plan` : "Subscribe"}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedPlanDetails && (
+                    <div className="mt-2 space-y-2">
+                      <p className="font-medium text-foreground">
+                        {selectedPlanDetails.description}
+                      </p>
+                      <p className="text-lg font-bold text-primary">
+                        ${selectedPlanDetails.monthlyUsd}/month
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {selectedPlanDetails.monthlyCoins} coins per month
+                      </p>
+                    </div>
+                  )}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col space-y-4 p-2">
+                {/* PayPal Button Container */}
+                <div className="bg-white p-4 rounded-lg">
+                  <div 
+                    id={`paypal-button-${selectedPlan}`} 
+                    className="rounded-md overflow-hidden mx-auto"
+                  />
+                  {paypalError && (
+                    <div className="text-red-500 text-sm text-center mt-2">
+                      {paypalError}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-center text-muted-foreground px-2">
+                  By subscribing, you agree to our Terms of Service and Privacy Policy.
+                  You can cancel your subscription at any time from your account settings.
+                </p>
+              </div>
+              <DialogFooter className="sm:justify-center">
+                <Button 
+                  variant="outline" 
+                  onClick={() => setModalOpen(false)}
+                  className="mt-2"
+                >
+                  Cancel
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+      
       {/* PayPal Subscription Script */}
       <Script
-        src={`https://www.paypal.com/sdk/js?client-id=${process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || 'AWBrlsaWcy6uSafXspmvBDMmapaYYSgocsGz2wBawAewf2XhO2tPxfsHXqgt09eOOq94hWhvr4fcH_Ts'}&vault=true&intent=subscription&currency=USD`}
+        src={`https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&vault=true&intent=subscription&currency=USD&components=buttons,funding-eligibility&commit=true&debug=true`}
         data-sdk-integration-source="button-factory"
         strategy="lazyOnload"
-        onLoad={initializePayPal}
-        onError={() => setPaypalError(true)}
+        onLoad={() => {
+          console.log("PayPal SDK loaded successfully");
+          setPaypalLoaded(true);
+        }}
+        onError={(e) => {
+          console.error("PayPal SDK failed to load:", e);
+          setPaypalError("Failed to load PayPal. Please refresh the page and try again.");
+        }}
       />
     </main>
   );
