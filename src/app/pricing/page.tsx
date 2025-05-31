@@ -246,8 +246,8 @@ export default function Page() {
     } else if (planName === "Pro" || planName === "Enterprise") {
       // Check if user is logged in
       if (!user) {
-        // Redirect to login page with return URL
-        router.push(`/auth/login?returnUrl=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(planName)}`);
+        // Redirect to login page with callback URL
+        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(planName)}`);
         return;
       }
       
@@ -553,7 +553,7 @@ export default function Page() {
                     <p className="text-sm">You need to be logged in to subscribe to a plan.</p>
                     <Button 
                       onClick={() => {
-                        router.push(`/auth/login?returnUrl=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(selectedPlan || '')}`);
+                        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(selectedPlan || '')}`);
                       }}
                       className="w-full bg-primary hover:bg-primary/90"
                     >
