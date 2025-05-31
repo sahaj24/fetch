@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Script from "next/script";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 
 // Define PayPal on window object for TypeScript
 declare global {
@@ -59,11 +59,10 @@ export default function Page() {
   const PAYPAL_URL = process.env.PAYPAL_URL || "https://api.sandbox.paypal.com";
   const PAYPAL_MODE = process.env.NEXT_PUBLIC_PAYPAL_MODE || "sandbox";
   
-  // Authentication context
-  const { user, isLoading } = useAuth();
+  // Auth context for user authentication
+  const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const searchParams = useSearchParams();
-
+  
   // State variables for PayPal integration and modal
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [paypalError, setPaypalError] = useState<string | null>(null);
@@ -73,6 +72,7 @@ export default function Page() {
   const [selectedPlanDetails, setSelectedPlanDetails] = useState<PricingPlan | null>(null);
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
+  const [authError, setAuthError] = useState<string | null>(null);
   
   // Use the working PayPal subscription plan ID provided
   const SUBSCRIPTION_PLAN_IDS = {
@@ -139,6 +139,15 @@ export default function Page() {
   const initializePayPal = () => {
     // Prevent re-initialization if already done for this plan
     if (paypalInitialized) {
+      return;
+    }
+    
+    // Verify user is logged in before initializing PayPal
+    if (!user) {
+      console.error("User not logged in, cannot initialize PayPal");
+      setAuthError("Please log in to subscribe to a plan");
+      // Redirect to login page
+      router.push(`/auth/login?returnTo=${encodeURIComponent('/pricing')}`);
       return;
     }
     
@@ -238,45 +247,27 @@ export default function Page() {
   const handleSubscribe = (planName: string) => {
     // Check if user is logged in
     if (!user) {
-      // Redirect to login page if not logged in
-      router.push(`/auth/login?redirect=pricing&plan=${planName}`);
+      console.log("User not logged in, redirecting to login");
+      // Redirect to login page with return URL
+      router.push(`/auth/login?returnTo=${encodeURIComponent('/pricing')}&plan=${encodeURIComponent(planName)}`);
       return;
     }
     
-    // Find the plan details
+    // Find the selected plan from our pricing plans
     const plan = pricingPlans.find(p => p.name === planName);
     
     if (plan) {
       setSelectedPlan(planName);
       setSelectedPlanDetails(plan);
       setModalOpen(true);
+      setAuthError(null);
       
-      // Initialize PayPal if it hasn't been done yet
+      // Initialize PayPal if it's loaded but not initialized
       if (paypalLoaded && !paypalInitialized) {
-        setTimeout(() => {
-          initializePayPal();
-          setPaypalInitialized(true);
-        }, 500);
-      } else if (paypalLoaded && selectedPlan !== planName) {
-        // Re-initialize if the plan changed
-        setTimeout(() => {
-          initializePayPal();
-        }, 500);
+        initializePayPal();
       }
     }
   };
-
-  useEffect(() => {
-    // Check for URL parameters when component loads
-    const planFromUrl = searchParams?.get('plan');
-    if (planFromUrl && user) {
-      // Auto-trigger the subscription flow for the selected plan
-      const validPlan = pricingPlans.find(p => p.name === planFromUrl);
-      if (validPlan && validPlan.name !== 'Free') {
-        handleSubscribe(planFromUrl);
-      }
-    }
-  }, [user, searchParams, pricingPlans]);
 
   useEffect(() => {
     // When modal is open, selected plan exists, and PayPal is loaded, initialize the buttons
@@ -564,6 +555,11 @@ export default function Page() {
                   {paypalError && (
                     <div className="text-red-500 text-sm text-center mt-2">
                       {paypalError}
+                    </div>
+                  )}
+                  {authError && (
+                    <div className="text-red-500 text-sm text-center mt-2">
+                      {authError}
                     </div>
                   )}
                 </div>
