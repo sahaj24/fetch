@@ -185,41 +185,30 @@ export default function Page() {
   const DEBUG_MODE = true;
 
   const initializePayPal = () => {
-    console.log('initializePayPal called');
+    console.log('Simple PayPal init called');
     
-    // Make sure user is logged in
-    if (!user) {
-      const errorMsg = "You must be logged in to subscribe. Please log in and try again.";
-      console.error(errorMsg);
-      setPaypalError(errorMsg);
-      return;
-    }
-    
-    // Check if PayPal SDK is loaded
+    // We only need this check as the user auth is handled in the button click
     if (typeof window === 'undefined' || !window.paypal) {
-      const errorMsg = "PayPal SDK not loaded yet. Please try again in a moment.";
-      console.error(errorMsg);
-      setPaypalError(errorMsg);
+      console.error('PayPal SDK not loaded');
+      setPaypalError('PayPal SDK failed to load. Please refresh the page.');
       return;
     }
     
-    // Find the container for the button
-    const buttonContainerId = `paypal-button-${selectedPlan}`;
-    console.log('Looking for button container:', buttonContainerId);
-    const buttonContainer = document.getElementById(buttonContainerId);
-    
-    if (!selectedPlan || !buttonContainer) {
-      const errorMsg = `Button container '${buttonContainerId}' not found in DOM.`;
-      console.error(errorMsg);
-      setPaypalError(errorMsg);
+    // Simple container ID 
+    const containerElement = document.getElementById('paypal-button-container');
+    if (!containerElement) {
+      console.error('PayPal button container not found');
+      setPaypalError('Button container not found. Please try again.');
       return;
     }
+    
+    // Clear any existing content
+    containerElement.innerHTML = '';
 
     try {
       console.log(`PayPal SDK loaded, initializing button for ${selectedPlan} plan...`);
 
-      // Clear any existing buttons in the container
-      buttonContainer.innerHTML = '';
+      // Container element already cleared above
       
       const planId = SUBSCRIPTION_PLAN_IDS[selectedPlan as keyof typeof SUBSCRIPTION_PLAN_IDS];
       if (!planId) {
@@ -280,7 +269,7 @@ export default function Page() {
       });
       
       // Render the PayPal button in the container
-      buttons.render(buttonContainer).then(() => {
+      buttons.render(containerElement).then(() => {
         // Mark as initialized
         setPaypalInitialized(true);
         setPaypalError(null);
@@ -300,21 +289,16 @@ export default function Page() {
     
     if (planName === "Free") {
       window.location.href = "/auth/register";
-    } else if (planName === "Pro" || planName === "Enterprise") {
-      // Check if user is logged in
-      if (!user) {
-        console.log('User not logged in, redirecting to login');
-        // Redirect to login page with callback URL
-        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
-        return;
-      }
-      
-      console.log('User is logged in, opening modal directly');
+      return;
+    }
+    
+    if (planName === "Pro" || planName === "Enterprise") {
+      // User is already logged in (we check this in the button's onClick now)
       // Find the selected plan details
       const plan = pricingPlans.find(p => p.name === planName);
       
       if (plan) {
-        // Reset paypal errors and initialized state
+        // Reset states
         setPaypalError(null);
         setPaypalInitialized(false);
         setSelectedPlan(planName);
@@ -322,32 +306,61 @@ export default function Page() {
         
         // Open the subscription modal
         setModalOpen(true);
+        
+        // We'll load the PayPal script when the modal opens
+        console.log('Opening subscription modal for', planName);
       }
-    } else {
-      // For custom plans
-      window.location.href = "/contact";
+      return;
     }
+    
+    // For custom plans
+    window.location.href = "/contact";
   };
 
   // No special handling needed after login - user will need to click subscribe again
   
-  // Initialize PayPal when modal opens and script is loaded
+  // This effect runs when the modal opens to load the PayPal script
   useEffect(() => {
-    // Only try to initialize PayPal if modal is open, script is loaded, and button isn't already initialized
-    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized && user) {
-      console.log('Modal is open and PayPal SDK is loaded, initializing PayPal button');
-      // Clear the initialized flag first in case we need to retry
-      setPaypalInitialized(false);
+    if (modalOpen && selectedPlan && user) {
+      console.log('Modal opened - loading PayPal script');
       
-      // Add a small delay to make sure the modal DOM is fully rendered
-      const timer = setTimeout(() => {
-        console.log('Initializing PayPal button now...');
+      // Load the PayPal script directly
+      const paypalScriptId = 'paypal-sdk-script';
+      
+      // Remove existing script if any
+      const existingScript = document.getElementById(paypalScriptId);
+      if (existingScript) {
+        existingScript.remove();
+      }
+      
+      // Create a new script element
+      const script = document.createElement('script');
+      script.id = paypalScriptId;
+      script.src = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&vault=true&intent=subscription&currency=USD`;
+      script.async = true;
+      
+      // When script loads, initialize the buttons
+      script.onload = () => {
+        console.log('PayPal script loaded, initializing buttons');
         initializePayPal();
-      }, 1000);
+      };
       
-      return () => clearTimeout(timer);
+      script.onerror = (error) => {
+        console.error('Failed to load PayPal script:', error);
+        setPaypalError('Failed to load PayPal. Please refresh and try again.');
+      };
+      
+      // Add the script to the document
+      document.body.appendChild(script);
+      
+      // Cleanup function
+      return () => {
+        if (document.getElementById(paypalScriptId)) {
+          document.getElementById(paypalScriptId)?.remove();
+        }
+      };
     }
-  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user]);
+  }, [modalOpen, selectedPlan, user]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
@@ -467,11 +480,20 @@ export default function Page() {
                   </Button>
                 ) : plan.name === "Pro" || plan.name === "Enterprise" ? (
                   <Button
-                    onClick={() => handleSubscribe(plan.name)}
+                    onClick={() => {
+                      // Check if user is logged in before subscribing
+                      if (!user) {
+                        // Not logged in - redirect to login page
+                        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
+                      } else {
+                        // User is logged in - proceed with subscription
+                        handleSubscribe(plan.name);
+                      }
+                    }}
                     className={`w-full ${plan.popular ? "bg-primary hover:bg-primary/90" : ""}`}
                     variant={plan.popular ? "default" : "outline"}
                   >
-                    {plan.buttonText}
+                    {!user ? "Login to Subscribe" : plan.buttonText}
                   </Button>
                 ) : (
                   <Button
@@ -672,13 +694,10 @@ export default function Page() {
                   </div>
                 ) : (
                   <div className="bg-white p-4 rounded-lg">
-                    {/* PayPal button container with increased height */}
-                    <div 
-                      id={`paypal-button-${selectedPlan}`} 
-                      className="rounded-md mx-auto min-h-[150px] border border-gray-200 flex justify-center items-center"
-                    >
+                    {/* Simple single PayPal button container */}
+                    <div id="paypal-button-container" className="rounded-md mx-auto min-h-[150px]">
                       {!paypalLoaded && (
-                        <div className="text-center">
+                        <div className="flex justify-center items-center h-[150px] border border-gray-200">
                           <p>Loading PayPal...</p>
                         </div>
                       )}
