@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Script from "next/script";
 
-// Add PayPal type definitions
+// Define PayPal on window object for TypeScript
 declare global {
   interface Window {
     paypal: any;
   }
 }
-
 import {
   Card,
   CardContent,
@@ -17,6 +17,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import Link from "next/link";
 import { Check, HelpCircle } from "lucide-react";
 import {
   Tooltip,
@@ -42,8 +43,6 @@ interface PricingPlan {
 }
 
 export default function Page() {
-  const [paypalScriptLoaded, setPaypalScriptLoaded] = useState(false);
-  
   const pricingPlans: PricingPlan[] = [
     {
       name: "Free",
@@ -96,46 +95,51 @@ export default function Page() {
     },
   ];
 
-  // Load the PayPal script
-  useEffect(() => {
-    if (!paypalScriptLoaded) {
-      const script = document.createElement('script');
-      script.src = "https://www.paypal.com/sdk/js?client-id=AWBrlsaWcy6uSafXspmvBDMmapaYYSgocsGz2wBawAewf2XhO2tPxfsHXqgt09eOOq94hWhvr4fcH_Ts&vault=true&intent=subscription";
-      script.setAttribute('data-sdk-integration-source', 'button-factory');
-      script.async = true;
-      script.onload = () => setPaypalScriptLoaded(true);
-      document.body.appendChild(script);
-    }
-  }, [paypalScriptLoaded]);
-
-  // Initialize PayPal buttons once the script is loaded
-  useEffect(() => {
-    if (paypalScriptLoaded && window.paypal) {
+  const [paypalLoaded, setPaypalLoaded] = useState(false);
+  const [paypalError, setPaypalError] = useState(false);
+  
+  // Initialize PayPal button when script loads
+  const initializePayPal = () => {
+    if (window.paypal && document.getElementById('paypal-button-container')) {
       try {
         window.paypal.Buttons({
           style: {
             shape: 'rect',
-            color: 'black',
+            color: 'gold',
             layout: 'vertical',
-            label: 'subscribe'
+            label: 'paypal'
           },
-          createSubscription: function(data: any, actions: any) {
-            return actions.subscription.create({
-              /* Creates the subscription */
-              plan_id: 'P-177295437L963004XNA5AZLQ'
+          createOrder: function(data: any, actions: any) {
+            return actions.order.create({
+              purchase_units: [{
+                description: 'Monthly subscription to Fetch Pro Plan',
+                amount: {
+                  value: '9.99',
+                  currency_code: 'USD'
+                }
+              }]
             });
           },
           onApprove: function(data: any, actions: any) {
-            console.log('Subscription approved:', data.subscriptionID);
-            // You can redirect to success page or update UI here
+            return actions.order.capture().then(function(details: any) {
+              // Show success message
+              alert('Transaction completed! Order ID: ' + details.id);
+              // You would normally call your server here to record the subscription
+            });
+          },
+          onError: function(err: any) {
+            console.error('PayPal error occurred:', err);
+            setPaypalError(true);
           }
-        }).render('#paypal-button-container-P-177295437L963004XNA5AZLQ');
+        }).render('#paypal-button-container');
+        setPaypalLoaded(true);
       } catch (error) {
-        console.error('PayPal button rendering failed:', error);
+        console.error('Failed to render PayPal button:', error);
+        setPaypalError(true);
       }
     }
-  }, [paypalScriptLoaded]);
-
+  };
+  
   const handleSubscribe = (planName: string) => {
     console.log(`Subscribing to ${planName} plan`);
     // In a real implementation, this would redirect to a checkout page
@@ -214,17 +218,32 @@ export default function Page() {
               </CardContent>
               <CardFooter>
                 {plan.name === "Pro" ? (
-                  <div className="w-full">
-                    <div id="paypal-button-container-P-177295437L963004XNA5AZLQ" className="w-full"></div>
-                    {!paypalScriptLoaded && (
-                      <Button
-                        className="w-full mt-2"
-                        variant="default"
-                        disabled
-                      >
-                        Loading Payment Options...
-                      </Button>
-                    )}
+                  <div className="w-full space-y-2">
+                    <div id="paypal-button-container" className="w-full min-h-[40px]">
+                      {!paypalLoaded && !paypalError && (
+                        <Button 
+                          className="w-full bg-[#0070ba] hover:bg-[#005ea6]"
+                          disabled={true}
+                        >
+                          <span className="flex items-center justify-center">
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Loading PayPal...
+                          </span>
+                        </Button>
+                      )}
+                      
+                      {paypalError && (
+                        <Button 
+                          className="w-full"
+                          onClick={() => window.location.href = "/payment"}
+                        >
+                          Subscribe Now
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 ) : (
                   <Button
@@ -333,6 +352,14 @@ export default function Page() {
           </p>
         </footer>
       </div>
+      
+      {/* PayPal Script */}
+      <Script
+        src="https://www.paypal.com/sdk/js?client-id=sb&currency=USD"
+        strategy="lazyOnload"
+        onLoad={initializePayPal}
+        onError={() => setPaypalError(true)}
+      />
     </main>
   );
 }
