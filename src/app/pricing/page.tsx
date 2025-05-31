@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import Script from "next/script";
 
 // Define PayPal on window object for TypeScript
 declare global {
@@ -52,24 +51,27 @@ interface PricingPlan {
 }
 
 export default function Page() {
-  // Access authentication state
-  const { user, isLoading } = useAuth();
-  const router = useRouter();
-  
-  // PayPal configuration constants
+  // PayPal configuration constants from environment variables
   const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "ATKi8kjOWlRBVCGdeAIeMslERAQ2q-u6h3XMCtmqWKIMPYv26yKKTcJpXgYrmiI1GWw80hIlioRrZTIW";
-  const PLAN_ID = "P-9TY72104PT817263KNA5N6FY"; // Working plan ID for both Pro and Enterprise
+  // Secret key is stored in environment but only used on server-side
+  const PAYPAL_URL = process.env.PAYPAL_URL || "https://api.sandbox.paypal.com";
+  const PAYPAL_MODE = process.env.NEXT_PUBLIC_PAYPAL_MODE || "sandbox";
   
   // State variables for PayPal integration and modal
-  const [modalOpen, setModalOpen] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
-  const [selectedPlanDetails, setSelectedPlanDetails] = useState<PricingPlan | null>(null);
+  const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [paypalError, setPaypalError] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [paypalInitialized, setPaypalInitialized] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedPlanDetails, setSelectedPlanDetails] = useState<PricingPlan | null>(null);
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
   
-  // Create a ref to track if PayPal has been loaded
-  const paypalLoaded = useRef(false);
+  // Use the working PayPal subscription plan ID provided
+  const SUBSCRIPTION_PLAN_IDS = {
+    Pro: "P-9TY72104PT817263KNA5N6FY", // Working plan ID 
+    Enterprise: "P-9TY72104PT817263KNA5N6FY" // Using same plan ID for now
+  };
   
   const pricingPlans: PricingPlan[] = [
     {
@@ -122,210 +124,143 @@ export default function Page() {
       buttonText: "Contact Sales",
     },
   ];
-  
-  // Initialize stored plan from localStorage on component mount
-  useEffect(() => {
-    console.log('Auth state changed. User:', user ? 'Logged in' : 'Not logged in');
-    
-    // Only proceed if the user is logged in and not in the loading state
-    if (typeof window !== 'undefined' && user && !isLoading) {
-      try {
-        const storedData = localStorage.getItem('selectedPlanBeforeLogin');
-        console.log('Checking localStorage for plan data:', storedData);
-        
-        if (storedData) {
-          const parsedData = JSON.parse(storedData);
-          console.log('Parsed plan data:', parsedData);
-          
-          // Make sure the data is recent (within the last 5 minutes)
-          const now = new Date().getTime();
-          const fiveMinutesAgo = now - (5 * 60 * 1000);
-          
-          if (parsedData.timestamp && parsedData.timestamp > fiveMinutesAgo) {
-            const planName = parsedData.plan;
-            console.log('Found valid stored plan after login:', planName);
-            
-            // Find the plan details
-            const planDetails = pricingPlans.find(p => p.name === planName);
-            if (planDetails) {
-              console.log('Opening modal with plan:', planName);
-              
-              // Set timeout to ensure all rendering is complete
-              setTimeout(() => {
-                setSelectedPlan(planName);
-                setSelectedPlanDetails(planDetails);
-                setModalOpen(true);
-              }, 500);
-              
-              // Clear it after opening modal
-              localStorage.removeItem('selectedPlanBeforeLogin');
-            }
-          } else {
-            console.log('Stored plan data is too old, ignoring');
-            localStorage.removeItem('selectedPlanBeforeLogin');
-          }
-        }
-      } catch (error) {
-        console.error('Error parsing stored plan data:', error);
-        localStorage.removeItem('selectedPlanBeforeLogin');
-      }
-    }
-  }, [user, pricingPlans, isLoading]);
 
-  // Helper function to render PayPal buttons directly when needed
-  const renderPayPalButtons = (containerId: string) => {
-    console.log('Rendering PayPal buttons directly');
-    
-    // Check for required variables
-    if (!selectedPlan || !user) {
-      console.error('Missing required data for PayPal');
-      setPaypalError('Missing required data for PayPal button');
+  // Initialize PayPal button when script loads
+  // Debug mode - set to true to see helpful information about subscription plans
+  const DEBUG_MODE = true;
+
+  const initializePayPal = () => {
+    // Prevent re-initialization if already done for this plan
+    if (paypalInitialized) {
       return;
     }
     
-    // Make sure PayPal SDK is loaded
-    if (typeof window === 'undefined' || !window.paypal) {
-      console.error('PayPal SDK not loaded');
-      setPaypalError('PayPal is not available. Please refresh the page.');
+    if (!window.paypal) {
+      const errorMsg = "PayPal SDK not loaded yet. Please try again in a moment.";
+      console.error(errorMsg);
+      setPaypalError(errorMsg);
       return;
     }
     
-    // Get container
-    const container = document.getElementById(containerId);
-    if (!container) {
-      console.error(`PayPal container not found: ${containerId}`);
-      setPaypalError('Button container not found. Please try again.');
+    const buttonContainer = document.getElementById(`paypal-button-${selectedPlan}`);
+    if (!selectedPlan || !buttonContainer) {
+      const errorMsg = "Button container not found in DOM.";
+      console.error(errorMsg);
+      setPaypalError(errorMsg);
       return;
     }
-    
-    // Clear any existing content
-    container.innerHTML = '';
-    
+
     try {
-      console.log(`Creating PayPal button for ${selectedPlan} plan with ID: ${PLAN_ID}`);
+      console.log(`PayPal SDK loaded, initializing button for ${selectedPlan} plan...`);
+
+      // Clear any existing buttons in the container
+      buttonContainer.innerHTML = '';
       
-      // Create the button with minimal options
-      window.paypal.Buttons({
+      const planId = SUBSCRIPTION_PLAN_IDS[selectedPlan as keyof typeof SUBSCRIPTION_PLAN_IDS];
+      if (!planId) {
+        throw new Error(`No plan ID found for ${selectedPlan}`);
+      }
+
+      // In debug mode, show a message about the plan ID
+      if (DEBUG_MODE) {
+        console.log(`Using plan ID: ${planId} for ${selectedPlan} plan`);
+      }
+      
+      const buttons = window.paypal.Buttons({
         style: {
-          shape: 'rect',
-          color: 'black',
-          layout: 'vertical',
-          label: 'subscribe'
+          shape: "rect",
+          color: "blue",
+          layout: "vertical",
+          label: "subscribe",
+          height: 45,
+          // Make the button look nicer in the modal
+          tagline: false,
         },
-        
-        // Create subscription with hard-coded plan ID
-        createSubscription: function(data: any, actions: any) {
+        createSubscription: (data: any, actions: any) => {
+          console.log(`Creating ${selectedPlan} subscription with plan ID: ${planId}`);
+          
           return actions.subscription.create({
-            'plan_id': PLAN_ID
+            plan_id: planId,
+            application_context: {
+              shipping_preference: "NO_SHIPPING",
+              user_action: "SUBSCRIBE_NOW",
+            },
           });
         },
-        
-        // Handle subscription approval
-        onApprove: function(data: any) {
-          console.log('Subscription successful!', data);
-          setModalOpen(false);
-          alert(`You've successfully subscribed to the ${selectedPlan} plan!`);
+        onApprove: (data: any, actions: any) => {
+          console.log("Subscription approved:", data);
+          // Update state to show success message in modal
+          setSubscriptionId(data.subscriptionID);
+          setSubscriptionSuccess(true);
+          return actions.redirect(); // Will be handled by our modal now
         },
-        
-        // Handle errors
-        onError: function(err: any) {
-          console.error('PayPal error:', err);
-          setPaypalError('There was a problem with the payment. Please try again.');
-        }
-      }).render(container);
+        onError: (err: any) => {
+          console.error("PayPal error:", err);
+          const errorMsg = err.message || 'Unknown error';
+          
+          // Special handling for the "RESOURCE_NOT_FOUND" error
+          if (errorMsg.includes("RESOURCE_NOT_FOUND") || err?.name === "RESOURCE_NOT_FOUND") {
+            setPaypalError(
+              `The subscription plan ID for ${selectedPlan} plan doesn't exist. ` +
+              `Please create a plan in your PayPal dashboard and update your .env.local file.`
+            );
+          } else {
+            setPaypalError(`PayPal error: ${errorMsg}`);
+          }
+        },
+        onCancel: (data: any) => {
+          console.log("Subscription cancelled:", data);
+          setSelectedPlan(null);
+        },
+      });
       
+      if (!buttons.isEligible()) {
+        console.error("PayPal Buttons are not eligible");
+        setPaypalError("PayPal integration not available. Please try a different payment method.");
+        return;
+      }
+      
+      buttons.render(`#paypal-button-${selectedPlan}`);
+      setPaypalInitialized(true);
     } catch (error: any) {
-      console.error('PayPal render error:', error);
-      setPaypalError(`Error: ${error.message || 'Unknown error'}`);
+      console.error("PayPal button initialization error:", error);
+      setPaypalError(`PayPal initialization error: ${error.message || 'Unknown error'}`);
     }
   };
 
   const handleSubscribe = (planName: string) => {
-    console.log(`Subscribe button clicked for ${planName} plan`);
-    
     if (planName === "Free") {
-      window.location.href = "/auth/register";
-      return;
-    }
-    
-    if (planName === "Pro" || planName === "Enterprise") {
+      window.location.href = "/register";
+    } else if (planName === "Pro" || planName === "Enterprise") {
       // Find the selected plan details
       const plan = pricingPlans.find(p => p.name === planName);
       
       if (plan) {
-        // Reset any errors
+        // Reset paypal errors and initialized state
         setPaypalError(null);
-        
-        // Set the selected plan
+        setPaypalInitialized(false);
         setSelectedPlan(planName);
         setSelectedPlanDetails(plan);
         
         // Open the subscription modal
         setModalOpen(true);
-        
-        // We'll render the PayPal buttons when the modal opens
-        console.log('Opening subscription modal for', planName);
       }
-      return;
+    } else {
+      // For custom plans
+      window.location.href = "/contact";
     }
-    
-    // For custom plans
-    window.location.href = "/contact";
   };
 
-  // No special handling needed after login - user will need to click subscribe again
-  
-  // This effect runs when the modal opens to load the PayPal script and render buttons
   useEffect(() => {
-    if (modalOpen && selectedPlan && user) {
-      console.log('Modal opened - loading PayPal script');
-      
-      // Load the PayPal script dynamically
-      const loadPayPalScript = () => {
-        const paypalScriptId = 'paypal-sdk-script';
-        
-        // Remove existing script if any
-        const existingScript = document.getElementById(paypalScriptId);
-        if (existingScript) {
-          existingScript.remove();
-        }
-        
-        // Create a new script element
-        const script = document.createElement('script');
-        script.id = paypalScriptId;
-        script.src = `https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&vault=true&intent=subscription&currency=USD`;
-        script.async = true;
-        
-        // When script loads, render the buttons
-        script.onload = () => {
-          console.log('PayPal script loaded, rendering buttons');
-          // Render buttons with a small delay to ensure DOM is ready
-          setTimeout(() => {
-            renderPayPalButtons('paypal-button-container');
-          }, 500);
-        };
-        
-        script.onerror = () => {
-          console.error('Failed to load PayPal script');
-          setPaypalError('Failed to load PayPal. Please refresh and try again.');
-        };
-        
-        // Add the script to the document
-        document.body.appendChild(script);
-      };
-      
-      // Load the script immediately
-      loadPayPalScript();
-      
-      // Cleanup function
-      return () => {
-        const script = document.getElementById('paypal-sdk-script');
-        if (script) {
-          script.remove();
-        }
-      };
+    // When modal is open, selected plan exists, and PayPal is loaded, initialize the buttons
+    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized) {
+      // Small timeout to ensure DOM is updated with the button container
+      const timer = setTimeout(() => {
+        initializePayPal();
+      }, 300);
+      return () => clearTimeout(timer);
     }
-  }, [modalOpen, selectedPlan, user]);
+  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
@@ -334,34 +269,9 @@ export default function Page() {
           <h1 className="text-4xl font-bold tracking-tight">
             Simple, Transparent Pricing
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-8">
-            Choose the plan that's right for you. All plans include access to
-          </p>
-          
-          {/* Temporary debug button - REMOVE AFTER TESTING */}
-          {user && (
-            <div className="mb-8 flex justify-center gap-4">
-                onClick={() => {
-                  console.log('Debug: Opening Pro subscription modal');
-                  handleSubscribe('Pro');
-                }}
-              >
-                Open Pro Modal
-              </button>
-              <button 
-                className="bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded text-sm"
-                onClick={() => {
-                  console.log('Debug: Opening Enterprise subscription modal');
-                  handleSubscribe('Enterprise');
-                }}
-              >
-                Open Enterprise Modal
-              </button>
-            </div>
-          </div>
-          
           <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-            Our core subtitle extraction features.
+            Choose the plan that's right for you. All plans include access to
+            our core subtitle extraction features.
           </p>
         </div>
 
@@ -433,20 +343,11 @@ export default function Page() {
                   </Button>
                 ) : plan.name === "Pro" || plan.name === "Enterprise" ? (
                   <Button
-                    onClick={() => {
-                      // Check if user is logged in before subscribing
-                      if (!user) {
-                        // Not logged in - redirect to login page
-                        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
-                      } else {
-                        // User is logged in - proceed with subscription
-                        handleSubscribe(plan.name);
-                      }
-                    }}
+                    onClick={() => handleSubscribe(plan.name)}
                     className={`w-full ${plan.popular ? "bg-primary hover:bg-primary/90" : ""}`}
                     variant={plan.popular ? "default" : "outline"}
                   >
-                    {!user ? "Login to Subscribe" : plan.buttonText}
+                    {plan.buttonText}
                   </Button>
                 ) : (
                   <Button
@@ -628,40 +529,17 @@ export default function Page() {
               </DialogHeader>
               <div className="flex flex-col space-y-4 p-2">
                 {/* PayPal Button Container */}
-                {!user ? (
-                  <div className="bg-white p-6 rounded-lg text-center space-y-4">
-                    <p className="text-sm">You need to be logged in to subscribe to a plan.</p>
-                    <Button 
-                      onClick={() => {
-                        console.log('Login button clicked in modal');
-                        // Simply redirect to login with callback to pricing page
-                        router.push(`/auth/login?callbackUrl=${encodeURIComponent('/pricing')}`);
-                      }}
-                      className="w-full bg-primary hover:bg-primary/90"
-                    >
-                      Log in to Continue
-                    </Button>
-                    <p className="text-xs text-muted-foreground">
-                      Don't have an account? <a href="/auth/register" className="text-primary hover:underline">Register</a>
-                    </p>
-                  </div>
-                ) : (
-                  <div className="bg-white p-4 rounded-lg">
-                    {/* Simple single PayPal button container */}
-                    <div id="paypal-button-container" className="rounded-md mx-auto min-h-[150px]">
-                      {!paypalLoaded && (
-                        <div className="flex justify-center items-center h-[150px] border border-gray-200">
-                          <p>Loading PayPal...</p>
-                        </div>
-                      )}
+                <div className="bg-white p-4 rounded-lg">
+                  <div 
+                    id={`paypal-button-${selectedPlan}`} 
+                    className="rounded-md overflow-hidden mx-auto"
+                  />
+                  {paypalError && (
+                    <div className="text-red-500 text-sm text-center mt-2">
+                      {paypalError}
                     </div>
-                    {paypalError && (
-                      <div className="text-red-500 text-sm text-center mt-2">
-                        {paypalError}
-                      </div>
-                    )}
-                  </div>
-                )}
+                  )}
+                </div>
                 <p className="text-xs text-center text-muted-foreground px-2">
                   By subscribing, you agree to our Terms of Service and Privacy Policy.
                   You can cancel your subscription at any time from your account settings.
@@ -681,25 +559,20 @@ export default function Page() {
         </DialogContent>
       </Dialog>
       
-      {/* PayPal Subscription Script - load only when needed */}
-      {modalOpen && user && (
-        <Script
-          src={`https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&vault=true&intent=subscription&currency=USD`}
-          strategy="afterInteractive"
-          onLoad={() => {
-            console.log('PayPal script loaded successfully');
-            setPaypalLoaded(true);
-            // Initialize immediately after loading
-            setTimeout(() => {
-              initializePayPal();
-            }, 500);
-          }}
-          onError={(e) => {
-            console.error('Failed to load PayPal script:', e);
-            setPaypalError('Failed to load PayPal payment system. Please try again later.');
-          }}
-        />
-      )}
+      {/* PayPal Subscription Script */}
+      <Script
+        src={`https://www.paypal.com/sdk/js?client-id=${PAYPAL_CLIENT_ID}&vault=true&intent=subscription&currency=USD&components=buttons,funding-eligibility&commit=true&debug=true`}
+        data-sdk-integration-source="button-factory"
+        strategy="lazyOnload"
+        onLoad={() => {
+          console.log("PayPal SDK loaded successfully");
+          setPaypalLoaded(true);
+        }}
+        onError={(e) => {
+          console.error("PayPal SDK failed to load:", e);
+          setPaypalError("Failed to load PayPal. Please refresh the page and try again.");
+        }}
+      />
     </main>
   );
 }
