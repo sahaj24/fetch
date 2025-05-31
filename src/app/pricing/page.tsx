@@ -239,6 +239,11 @@ export default function Page() {
     if (planName === "Free") {
       window.location.href = "/register";
     } else if (planName === "Pro" || planName === "Enterprise") {
+      // Always make sure auth prompt is closed for logged in users
+      if (user) {
+        setShowAuthPrompt(false);
+      }
+      
       // Check if user is authenticated
       if (!user) {
         // User is not logged in, store the plan and show auth prompt
@@ -248,6 +253,7 @@ export default function Page() {
           setSelectedPlanDetails(plan);
         }
         setShowAuthPrompt(true);
+        setModalOpen(false); // Make sure modal is closed
         return;
       }
       
@@ -270,9 +276,21 @@ export default function Page() {
     }
   };
 
+  // Initial setup - ensure auth prompt is never shown for authenticated users
+  useEffect(() => {
+    if (user) {
+      setShowAuthPrompt(false);
+    }
+  }, [user]);
+  
   // Check URL parameters for selected plan on page load
   useEffect(() => {
     if (!isLoading) {
+      // If user is authenticated, ensure auth prompt is never shown
+      if (user) {
+        setShowAuthPrompt(false);
+      }
+      
       // Get plan from URL query params if it exists
       const urlParams = new URLSearchParams(window.location.search);
       const planParam = urlParams.get('plan');
@@ -292,6 +310,8 @@ export default function Page() {
           } else {
             // Show auth prompt if not authenticated
             setShowAuthPrompt(true);
+            // Ensure payment modal is closed
+            setModalOpen(false);
           }
         }
       }
@@ -301,6 +321,9 @@ export default function Page() {
   useEffect(() => {
     // When modal is open, selected plan exists, and PayPal is loaded, initialize the buttons
     if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized && user) {
+      // Make absolutely sure auth dialog is not shown
+      setShowAuthPrompt(false);
+      
       // Small timeout to ensure DOM is updated with the button container
       const timer = setTimeout(() => {
         initializePayPal();
@@ -309,10 +332,10 @@ export default function Page() {
     }
     
     // Safety check: if user is authenticated, make sure auth prompt is not shown
-    if (user && !isLoading) {
+    if (user) {
       setShowAuthPrompt(false);
     }
-  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user, isLoading]);
+  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
