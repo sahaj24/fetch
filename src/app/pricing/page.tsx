@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Script from "next/script";
-import { useRouter } from "next/navigation";
-import { useAuth } from "@/context/AuthContext";
 
 // Define PayPal on window object for TypeScript
 declare global {
@@ -59,10 +57,6 @@ export default function Page() {
   const PAYPAL_URL = process.env.PAYPAL_URL || "https://api.sandbox.paypal.com";
   const PAYPAL_MODE = process.env.NEXT_PUBLIC_PAYPAL_MODE || "sandbox";
   
-  // Auth context for checking user authentication
-  const { user, isLoading } = useAuth();
-  const router = useRouter();
-
   // State variables for PayPal integration and modal
   const [paypalLoaded, setPaypalLoaded] = useState(false);
   const [paypalError, setPaypalError] = useState<string | null>(null);
@@ -238,14 +232,6 @@ export default function Page() {
     if (planName === "Free") {
       window.location.href = "/register";
     } else if (planName === "Pro" || planName === "Enterprise") {
-      // Check if user is authenticated
-      if (!user) {
-        // Redirect to login with return URL
-        const returnUrl = `/pricing?plan=${encodeURIComponent(planName)}`;
-        router.push(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
-        return;
-      }
-      
       // Find the selected plan details
       const plan = pricingPlans.find(p => p.name === planName);
       
@@ -256,7 +242,7 @@ export default function Page() {
         setSelectedPlan(planName);
         setSelectedPlanDetails(plan);
         
-        // Open the subscription modal for authenticated users
+        // Open the subscription modal
         setModalOpen(true);
       }
     } else {
@@ -265,43 +251,16 @@ export default function Page() {
     }
   };
 
-  // Check URL parameters for selected plan on page load
-  useEffect(() => {
-    if (!isLoading) {
-      // Get plan from URL query params if it exists
-      const urlParams = new URLSearchParams(window.location.search);
-      const planParam = urlParams.get('plan');
-      
-      if (planParam && (planParam === 'Pro' || planParam === 'Enterprise')) {
-        // Set selected plan from URL parameters
-        const plan = pricingPlans.find(p => p.name === planParam);
-        if (plan) {
-          setSelectedPlan(planParam);
-          setSelectedPlanDetails(plan);
-          
-          // If user is authenticated, show payment modal
-          if (user) {
-            setModalOpen(true);
-          } else {
-            // Redirect to login with return URL
-            const returnUrl = `/pricing?plan=${encodeURIComponent(planParam)}`;
-            router.push(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
-          }
-        }
-      }
-    }
-  }, [isLoading, user, router]);
-
   useEffect(() => {
     // When modal is open, selected plan exists, and PayPal is loaded, initialize the buttons
-    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized && user) {
+    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized) {
       // Small timeout to ensure DOM is updated with the button container
       const timer = setTimeout(() => {
         initializePayPal();
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user]);
+  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
@@ -497,7 +456,6 @@ export default function Page() {
           </p>
         </footer>
       </div>
-      
       
       {/* Subscription Modal Dialog */}
       <Dialog 
