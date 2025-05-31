@@ -72,7 +72,6 @@ export default function Page() {
   const [selectedPlanDetails, setSelectedPlanDetails] = useState<PricingPlan | null>(null);
   const [subscriptionSuccess, setSubscriptionSuccess] = useState(false);
   const [subscriptionId, setSubscriptionId] = useState<string | null>(null);
-  const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   
   // Use the working PayPal subscription plan ID provided
   const SUBSCRIPTION_PLAN_IDS = {
@@ -239,21 +238,11 @@ export default function Page() {
     if (planName === "Free") {
       window.location.href = "/register";
     } else if (planName === "Pro" || planName === "Enterprise") {
-      // Always make sure auth prompt is closed for logged in users
-      if (user) {
-        setShowAuthPrompt(false);
-      }
-      
       // Check if user is authenticated
       if (!user) {
-        // User is not logged in, store the plan and show auth prompt
-        setSelectedPlan(planName);
-        const plan = pricingPlans.find(p => p.name === planName);
-        if (plan) {
-          setSelectedPlanDetails(plan);
-        }
-        setShowAuthPrompt(true);
-        setModalOpen(false); // Make sure modal is closed
+        // Redirect to login with return URL
+        const returnUrl = `/pricing?plan=${encodeURIComponent(planName)}`;
+        router.push(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
         return;
       }
       
@@ -276,21 +265,9 @@ export default function Page() {
     }
   };
 
-  // Initial setup - ensure auth prompt is never shown for authenticated users
-  useEffect(() => {
-    if (user) {
-      setShowAuthPrompt(false);
-    }
-  }, [user]);
-  
   // Check URL parameters for selected plan on page load
   useEffect(() => {
     if (!isLoading) {
-      // If user is authenticated, ensure auth prompt is never shown
-      if (user) {
-        setShowAuthPrompt(false);
-      }
-      
       // Get plan from URL query params if it exists
       const urlParams = new URLSearchParams(window.location.search);
       const planParam = urlParams.get('plan');
@@ -305,35 +282,24 @@ export default function Page() {
           // If user is authenticated, show payment modal
           if (user) {
             setModalOpen(true);
-            // Ensure auth prompt is closed for logged in users
-            setShowAuthPrompt(false);
           } else {
-            // Show auth prompt if not authenticated
-            setShowAuthPrompt(true);
-            // Ensure payment modal is closed
-            setModalOpen(false);
+            // Redirect to login with return URL
+            const returnUrl = `/pricing?plan=${encodeURIComponent(planParam)}`;
+            router.push(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
           }
         }
       }
     }
-  }, [isLoading, user]);
+  }, [isLoading, user, router]);
 
   useEffect(() => {
     // When modal is open, selected plan exists, and PayPal is loaded, initialize the buttons
     if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized && user) {
-      // Make absolutely sure auth dialog is not shown
-      setShowAuthPrompt(false);
-      
       // Small timeout to ensure DOM is updated with the button container
       const timer = setTimeout(() => {
         initializePayPal();
       }, 300);
       return () => clearTimeout(timer);
-    }
-    
-    // Safety check: if user is authenticated, make sure auth prompt is not shown
-    if (user) {
-      setShowAuthPrompt(false);
     }
   }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized, user]);
 
@@ -532,49 +498,6 @@ export default function Page() {
         </footer>
       </div>
       
-      {/* Authentication Required Dialog */}
-      <Dialog 
-        open={showAuthPrompt} 
-        onOpenChange={setShowAuthPrompt}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-bold">
-              Authentication Required
-            </DialogTitle>
-            <DialogDescription>
-              <div className="mt-2">
-                <p className="text-muted-foreground">
-                  You need to be logged in to subscribe to a plan.
-                </p>
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col space-y-4 p-2">
-            <Button
-              onClick={() => {
-                setShowAuthPrompt(false);
-                const returnUrl = `/pricing?plan=${encodeURIComponent(selectedPlan || '')}`;  
-                router.push(`/auth/login?returnUrl=${encodeURIComponent(returnUrl)}`);
-              }}
-              className="w-full"
-            >
-              Log In
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowAuthPrompt(false);
-                const returnUrl = `/pricing?plan=${encodeURIComponent(selectedPlan || '')}`;  
-                router.push(`/auth/signup?returnUrl=${encodeURIComponent(returnUrl)}`);
-              }}
-              className="w-full"
-            >
-              Sign Up
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
       
       {/* Subscription Modal Dialog */}
       <Dialog 
