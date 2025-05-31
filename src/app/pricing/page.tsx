@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Script from "next/script";
 import { addSubscriptionCoins } from "@/utils/coinUtils";
+import { initializeUserSubscription } from "@/utils/subscriptionUtils";
 import { supabase } from "@/supabase/config";
 
 // Define PayPal on window object for TypeScript
@@ -218,13 +219,21 @@ export default function Page() {
         },
         onApprove: async (data: any, actions: any) => {
           console.log('Subscription approved:', data);
-          setSubscriptionId(data.subscriptionID);
+          const subscriptionID = data.subscriptionID;
+          setSubscriptionId(subscriptionID);
           
           // Get the current user
           const { data: { session } } = await supabase.auth.getSession();
           const userId = session?.user?.id;
           
           if (userId && selectedPlanDetails) {
+            // Initialize the user's subscription in the database
+            await initializeUserSubscription(
+              userId,
+              selectedPlanDetails.name,
+              subscriptionID
+            );
+            
             // Add the subscription coins to the user's balance
             const success = await addSubscriptionCoins(
               userId,
