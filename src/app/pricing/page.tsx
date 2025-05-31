@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Script from "next/script";
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 
 // Define PayPal on window object for TypeScript
 declare global {
@@ -62,6 +62,7 @@ export default function Page() {
   // Auth context for user authentication
   const { user, isLoading: authLoading } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   // State variables for PayPal integration and modal
   const [paypalLoaded, setPaypalLoaded] = useState(false);
@@ -261,24 +262,10 @@ export default function Page() {
       setSelectedPlanDetails(plan);
       setModalOpen(true);
       setAuthError(null);
-      
-      // Initialize PayPal if it's loaded but not initialized
-      if (paypalLoaded && !paypalInitialized) {
-        initializePayPal();
-      }
     }
   };
 
-  useEffect(() => {
-    // When modal is open, selected plan exists, and PayPal is loaded, initialize the buttons
-    if (modalOpen && selectedPlan && paypalLoaded && !paypalInitialized) {
-      // Small timeout to ensure DOM is updated with the button container
-      const timer = setTimeout(() => {
-        initializePayPal();
-      }, 300);
-      return () => clearTimeout(timer);
-    }
-  }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized]);
+
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
