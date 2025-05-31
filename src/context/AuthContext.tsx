@@ -12,6 +12,7 @@ interface AuthContextType {
   session: Session | null;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ success: boolean, error?: string }>;
+  signInWithGoogle: () => Promise<{ success: boolean, error?: string }>;
   signUp: (email: string, password: string, name: string) => Promise<{ success: boolean, error?: string }>;
   signOut: () => Promise<void>;
   sendPasswordResetEmail: (email: string) => Promise<{ success: boolean, error?: string }>;
@@ -24,6 +25,7 @@ const AuthContext = createContext<AuthContextType>({
   session: null,
   isLoading: true,
   signIn: async () => ({ success: false, error: "Not implemented" }),
+  signInWithGoogle: async () => ({ success: false, error: "Not implemented" }),
   signUp: async () => ({ success: false, error: "Not implemented" }),
   signOut: async () => {},
   sendPasswordResetEmail: async () => ({ success: false, error: "Not implemented" }),
@@ -58,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initializeAuth();
     
     // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       setSession(session);
       setUser(session?.user || null);
       
@@ -68,11 +70,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       
       setIsLoading(false);
+      
+      // Handle redirection after successful sign-in
+      if (event === 'SIGNED_IN') {
+        // Check if there's a stored redirect URL
+        const redirectUrl = localStorage.getItem('authRedirectUrl');
+        if (redirectUrl) {
+          // Clear the stored URL
+          localStorage.removeItem('authRedirectUrl');
+          
+          // Redirect to the stored URL after a short delay
+          // This ensures the auth state is fully processed
+          setTimeout(() => {
+            router.push(redirectUrl);
+          }, 300);
+        }
+      }
     });
     
     // Clean up the subscription
     return () => subscription.unsubscribe();
   }, []);
+
+  // Google Sign in functionality
+  const signInWithGoogle = async () => {
+    try {
+      // Configure the Google OAuth provider
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+      
+      if (error) {
+        throw error;
+      }
+      
+      return { success: true };
+    } catch (error: any) {
+      console.error("Error signing in with Google:", error);
+      
+      let errorMessage = "Failed to sign in with Google. Please try again.";
+      
+      if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      return { success: false, error: errorMessage };
+    }
+  };
 
   // Sign in functionality
   const signIn = async (email: string, password: string) => {
@@ -230,6 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     session,
     isLoading,
     signIn,
+    signInWithGoogle,
     signUp,
     signOut,
     sendPasswordResetEmail,

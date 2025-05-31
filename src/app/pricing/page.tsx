@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Script from "next/script";
+import { useRouter } from "next/navigation";
 
 // Define PayPal on window object for TypeScript
 declare global {
@@ -9,6 +10,7 @@ declare global {
     paypal: any;
   }
 }
+
 import {
   Card,
   CardContent,
@@ -18,7 +20,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { Check, HelpCircle, X } from "lucide-react";
+import { Check, HelpCircle, X, Lock } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -50,10 +52,41 @@ interface PricingPlan {
   popular?: boolean;
 }
 
+// Mock authentication hook - replace with your actual auth implementation
+const useAuth = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    // Simulate checking authentication status
+    // Replace this with your actual authentication check
+    const checkAuth = async () => {
+      try {
+        // Make an API call to verify authentication status
+        const response = await fetch('/api/auth/verify');
+        const { isAuthenticated } = await response.json();
+        
+        setIsAuthenticated(isAuthenticated);
+      } catch (error) {
+        console.error('Auth check failed:', error);
+        setIsAuthenticated(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkAuth();
+  }, []);
+
+  return { isAuthenticated, isLoading };
+};
+
 export default function Page() {
+  const router = useRouter();
+  const { isAuthenticated, isLoading } = useAuth();
+
   // PayPal configuration constants from environment variables
   const PAYPAL_CLIENT_ID = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID || "ATKi8kjOWlRBVCGdeAIeMslERAQ2q-u6h3XMCtmqWKIMPYv26yKKTcJpXgYrmiI1GWw80hIlioRrZTIW";
-  // Secret key is stored in environment but only used on server-side
   const PAYPAL_URL = process.env.PAYPAL_URL || "https://api.sandbox.paypal.com";
   const PAYPAL_MODE = process.env.NEXT_PUBLIC_PAYPAL_MODE || "sandbox";
   
@@ -125,7 +158,6 @@ export default function Page() {
     },
   ];
 
-  // Initialize PayPal button when script loads
   // Debug mode - set to true to see helpful information about subscription plans
   const DEBUG_MODE = true;
 
@@ -173,7 +205,6 @@ export default function Page() {
           layout: "vertical",
           label: "subscribe",
           height: 45,
-          // Make the button look nicer in the modal
           tagline: false,
         },
         createSubscription: (data: any, actions: any) => {
@@ -189,16 +220,14 @@ export default function Page() {
         },
         onApprove: (data: any, actions: any) => {
           console.log("Subscription approved:", data);
-          // Update state to show success message in modal
           setSubscriptionId(data.subscriptionID);
           setSubscriptionSuccess(true);
-          return actions.redirect(); // Will be handled by our modal now
+          return actions.redirect();
         },
         onError: (err: any) => {
           console.error("PayPal error:", err);
           const errorMsg = err.message || 'Unknown error';
           
-          // Special handling for the "RESOURCE_NOT_FOUND" error
           if (errorMsg.includes("RESOURCE_NOT_FOUND") || err?.name === "RESOURCE_NOT_FOUND") {
             setPaypalError(
               `The subscription plan ID for ${selectedPlan} plan doesn't exist. ` +
@@ -230,8 +259,19 @@ export default function Page() {
 
   const handleSubscribe = (planName: string) => {
     if (planName === "Free") {
+      // Free plan doesn't require authentication
       window.location.href = "/register";
-    } else if (planName === "Pro" || planName === "Enterprise") {
+      return;
+    }
+
+    // For paid plans, check authentication
+    if (!isAuthenticated) {
+      // Redirect to login page with return URL
+      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      return;
+    }
+
+    if (planName === "Pro" || planName === "Enterprise") {
       // Find the selected plan details
       const plan = pricingPlans.find(p => p.name === planName);
       
@@ -262,6 +302,18 @@ export default function Page() {
     }
   }, [modalOpen, selectedPlan, paypalLoaded, paypalInitialized]);
 
+  // Show loading state while checking authentication
+  if (isLoading) {
+    return (
+      <main className="flex min-h-screen flex-col items-center justify-center p-6 md:p-12 bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-6 md:p-12 bg-background">
       <div className="w-full max-w-6xl space-y-8">
@@ -273,13 +325,32 @@ export default function Page() {
             Choose the plan that's right for you. All plans include access to
             our core subtitle extraction features.
           </p>
+          {!isAuthenticated && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 max-w-2xl mx-auto">
+              <div className="flex items-center justify-center space-x-2 text-blue-700">
+                <Lock className="h-4 w-4" />
+                <p className="text-sm">
+                  <Link href="/login" className="font-medium hover:underline">
+                    Sign in
+                  </Link>{" "}
+                  to subscribe to paid plans, or{" "}
+                  <Link href="/register" className="font-medium hover:underline">
+                    create an account
+                  </Link>{" "}
+                  to get started with our free plan.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           {pricingPlans.map((plan) => (
             <Card
               key={plan.name}
-              className={`flex flex-col ${plan.popular ? "border-primary shadow-lg" : ""}`}
+              className={`flex flex-col ${plan.popular ? "border-primary shadow-lg" : ""} ${
+                !isAuthenticated && plan.monthlyUsd > 0 ? "opacity-75" : ""
+              }`}
             >
               {plan.popular && (
                 <div className="bg-primary text-primary-foreground text-center py-1 text-sm font-medium rounded-t-lg">
@@ -287,7 +358,12 @@ export default function Page() {
                 </div>
               )}
               <CardHeader>
-                <CardTitle className="text-2xl">{plan.name}</CardTitle>
+                <CardTitle className="text-2xl flex items-center space-x-2">
+                  <span>{plan.name}</span>
+                  {!isAuthenticated && plan.monthlyUsd > 0 && (
+                    <Lock className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </CardTitle>
                 <p className="text-muted-foreground">{plan.description}</p>
                 <div className="mt-4">
                   <span className="text-4xl font-bold">
@@ -346,8 +422,9 @@ export default function Page() {
                     onClick={() => handleSubscribe(plan.name)}
                     className={`w-full ${plan.popular ? "bg-primary hover:bg-primary/90" : ""}`}
                     variant={plan.popular ? "default" : "outline"}
+                    disabled={!isAuthenticated}
                   >
-                    {plan.buttonText}
+                    {!isAuthenticated ? "Sign in to Subscribe" : plan.buttonText}
                   </Button>
                 ) : (
                   <Button
@@ -461,7 +538,6 @@ export default function Page() {
       <Dialog 
         open={modalOpen} 
         onOpenChange={(open) => {
-          // Reset success state when closing modal
           if (!open) {
             setSubscriptionSuccess(false);
             setSubscriptionId(null);
@@ -496,7 +572,6 @@ export default function Page() {
                 <Button 
                   onClick={() => {
                     setModalOpen(false);
-                    // Could redirect to dashboard or account page
                   }}
                   className="mt-4"
                 >

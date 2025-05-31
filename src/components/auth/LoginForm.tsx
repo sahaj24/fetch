@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,8 +17,19 @@ export default function LoginForm() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [redirectUrl, setRedirectUrl] = useState('');
   const { signIn, signInWithGoogle } = useAuth();
   const router = useRouter();
+
+  // Get redirect URL from query params on component mount
+  useEffect(() => {
+    // Check if we have a redirect URL in the query string
+    const params = new URLSearchParams(window.location.search);
+    const redirect = params.get('redirect');
+    if (redirect) {
+      setRedirectUrl(redirect);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +42,10 @@ export default function LoginForm() {
         throw new Error(result.error);
       }
       
-      // Redirect handled by the auth context
+      // Handle redirect if present, otherwise let auth context handle it
+      if (redirectUrl) {
+        router.push(redirectUrl);
+      }
     } catch (err: any) {
       console.error('Login error:', err);
       
@@ -48,7 +62,14 @@ export default function LoginForm() {
     setError('');
     
     try {
+      // For Google sign-in, we'll use the standard method
+      // The redirect will be handled when the user returns
       const result = await signInWithGoogle();
+      
+      // Store the redirect URL in localStorage so we can use it after OAuth callback
+      if (redirectUrl) {
+        localStorage.setItem('authRedirectUrl', redirectUrl);
+      }
       
       if (result.error) {
         throw new Error(result.error);
