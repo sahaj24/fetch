@@ -86,20 +86,31 @@ export async function initializeUserCoins(userId: string): Promise<number | null
 /**
  * Gets a user's current coin balance
  */
-export async function getUserCoinsBalance(userId: string): Promise<number | null> {
+export async function getUserCoinsBalance(userId: string | undefined): Promise<number | null> {
   try {
+    if (!userId) {
+      console.warn('getUserCoinsBalance: No user ID provided');
+      return null;
+    }
+
+    // Get the user's coin balance
     const { data, error } = await supabase
       .from('user_coins')
       .select('balance')
       .eq('user_id', userId)
       .single();
-      
+
     if (error) {
-      console.error('Error getting user coins balance:', error);
+      console.error('Error fetching user coins data:', error);
       return null;
     }
-    
-    return data?.balance || 0;
+
+    if (!data) {
+      console.warn('User coins record not found');
+      return null;
+    }
+
+    return data.balance || 0;
   } catch (error) {
     console.error('Error in getUserCoinsBalance:', error);
     return null;
@@ -118,6 +129,9 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       console.error('Cannot deduct coins: No user ID provided');
       return false;
     }
+    
+    // Log the function being called to debug if it's actually executing
+    console.log(`[DEBUG] deductCoinsForOperation called with userId=${userId}, operationType=${operationType}, coinsToDeduct=${coinsToDeduct}`);
 
     console.log(`[DEBUG] Attempting to deduct ${coinsToDeduct} coins for user ${userId} for operation ${operationType}`);
     console.log(`[DEBUG] User ID type: ${typeof userId}, value: ${userId}`);
@@ -158,14 +172,6 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
     const normalizedTier = subscriptionTier.toUpperCase();
     console.log(`[DEBUG] Normalized subscription tier: ${normalizedTier}`);
     
-    // Verify this operation should deduct coins for this subscription tier
-    // For now, ALL tiers (FREE, PRO, ENTERPRISE) should have coins deducted
-    const validTiers = ['FREE', 'PRO', 'ENTERPRISE']; 
-    
-    if (!validTiers.includes(normalizedTier)) {
-      console.warn(`[DEBUG] Unknown subscription tier: ${normalizedTier}, defaulting to FREE`);
-    }
-    
     // Always check if the user has enough coins, regardless of subscription tier
     // This ensures Pro users also have their coins deducted properly
     if (currentBalance < coinsToDeduct) {
@@ -179,20 +185,15 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
     console.log(`[DEBUG] Updating user ${userId} coins: balance ${currentBalance} -> ${newBalance}, total_spent ${totalSpent} -> ${newTotalSpent}`);
     console.log(`[DEBUG] Subscription tier remains: ${subscriptionTier}`);
     
-    // Include the subscription tier in the update to ensure it's still set correctly
-    // This is an important fix to make sure the tier doesn't get lost or reset
-    const updatePayload = {
-      balance: newBalance,
-      total_spent: newTotalSpent,
-      // Keep the existing subscription tier but ensure it's normalized
-      subscription_tier: normalizedTier
-    };
-    
-    console.log(`[DEBUG] Database update payload:`, updatePayload);
-    
+    // Update the user's coin balance
     const { error: updateError } = await supabase
       .from('user_coins')
-      .update(updatePayload)
+      .update({
+        balance: newBalance,
+        total_spent: newTotalSpent,
+        // Keep the existing subscription tier
+        subscription_tier: normalizedTier
+      })
       .eq('user_id', userId);
     
     if (updateError) {
@@ -270,13 +271,16 @@ export async function addSubscriptionCoins(userId: string, planName: string, coi
     const newBalance = currentBalance + coinsToAdd;
     const newTotalEarned = totalEarned + coinsToAdd;
 
+    // IMPORTANT: Normalize the subscription tier name to uppercase for consistency
+    const normalizedTierName = planName.toUpperCase();
+    
     // Update the user's coin balance and subscription tier
     const { error: updateError } = await supabase
       .from('user_coins')
       .update({
         balance: newBalance,
         total_earned: newTotalEarned,
-        subscription_tier: planName.toUpperCase(),
+        subscription_tier: normalizedTierName,
         last_coin_refresh: new Date().toISOString()
       })
       .eq('user_id', userId);

@@ -917,7 +917,9 @@ export async function POST(req: NextRequest) {
       // Deduct coins for successfully processed videos
       if (userId && processingStats.processedVideos > 0) {
         try {
-          console.log(`Attempting coin handling for user ${userId}`);
+          console.log(`[COIN DEBUG] Attempting coin handling for user ${userId}`);
+          console.log(`[COIN DEBUG] typeof deductCoinsForOperation: ${typeof deductCoinsForOperation}`);
+          console.log(`[COIN DEBUG] Function available: ${!!deductCoinsForOperation}`);
           
           // Get coin cost from the payload if available, otherwise calculate it
           let cost = 0;
@@ -962,7 +964,10 @@ export async function POST(req: NextRequest) {
             if (!deductionSuccess) {
               console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
               return NextResponse.json(
-                { error: "Insufficient coins for this operation" },
+                { 
+                  error: "Insufficient coins for this operation",
+                  requireMoreCoins: true
+                },
                 { status: 402 }
               );
             }
