@@ -1040,14 +1040,14 @@ export async function POST(req: NextRequest) {
             // Use a valid OperationType from the defined type
             const operationType = inputType === "url" ? "EXTRACT_SUBTITLES" : "BATCH_EXTRACT";
             const deductionResult = await deductCoinsForOperation(userId, operationType, cost);
-            
-            if (!deductionResult.success) {
+              if (!deductionResult.success) {
               if (deductionResult.errorType === 'INSUFFICIENT_COINS') {
                 console.warn(`⚠️ User ${userId} has insufficient coins (${deductionResult.currentBalance}/${deductionResult.requiredAmount}) - continuing processing`);
               } else {
                 console.warn(`⚠️ Failed to deduct ${cost} coins for user ${userId}: ${deductionResult.error} - continuing processing`);
               }
-              // Continue processing regardless of coin deduction failure            } else {
+              // Continue processing regardless of coin deduction failure
+            } else {
               console.log(`[COIN DEBUG] ✅ COIN DEDUCTION COMPLETED: Successfully deducted ${cost} coins from user ${userId}. New balance: ${deductionResult.newBalance}`);
             }
           }
