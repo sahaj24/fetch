@@ -39,8 +39,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("input");
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [hasResults, setHasResults] = useState(false);
-  const [selectedFormats, setSelectedFormats] = useState<string[]>(DEFAULT_FORMATS);
+  const [hasResults, setHasResults] = useState(false);  const [selectedFormats, setSelectedFormats] = useState<string[]>(DEFAULT_FORMATS);
   const [selectedLanguage, setSelectedLanguage] = useState("en");
 
   const [processedVideos, setProcessedVideos] = useState(0);
@@ -55,11 +54,17 @@ export default function Home() {
   const [coinCostEstimate, setCoinCostEstimate] = useState(0);
   const [videoCount, setVideoCount] = useState(1);
   const [isPlaylist, setIsPlaylist] = useState(false);
-  
-  // For coin balance checks
+    // For coin balance checks
   const [userCoinBalance, setUserCoinBalance] = useState<number | null>(null);
   const [isLoadingCoins, setIsLoadingCoins] = useState(false);
   const [hasInsufficientCoins, setHasInsufficientCoins] = useState(false);
+
+  // For tracking current input data from InputSection
+  const [currentInputData, setCurrentInputData] = useState<{
+    inputType: "url" | "file";
+    url?: string;
+    file?: File;
+    csvContent?: string;  } | null>(null);
 
   // Helper function to format time as mm:ss
   const formatTimeRemaining = (seconds: number): string => {
@@ -106,6 +111,26 @@ export default function Home() {
       
       setProgress(currentProgress);
     }, 300);
+  };  // Function to handle input data changes from InputSection
+  const handleInputDataChange = useCallback((data: {
+    inputType: "url" | "file";
+    url?: string;
+    file?: File;
+    csvContent?: string;
+  } | null) => {
+    setCurrentInputData(data);
+  }, []);
+
+  // Function to handle the Start Processing button click
+  const handleStartProcessing = () => {
+    if (!currentInputData) {
+      toast.error("Please enter a YouTube URL or upload a CSV file", {
+        duration: 3000
+      });
+      return;
+    }
+
+    handleSubmit(currentInputData);
   };
 
   // Function to process YouTube URLs or CSV files
@@ -115,6 +140,9 @@ export default function Home() {
     file?: File;
     csvContent?: string;
   }) => {
+    // Store the current input data
+    setCurrentInputData(data);
+
     // Build the payload
     type PayloadType = {
       inputType: "url" | "file";
@@ -137,33 +165,25 @@ export default function Home() {
     if (data.inputType === "url" && data.url) {
       payload.url = data.url;
     } else if (data.inputType === "file" && data.csvContent) {
-      payload.csvContent = data.csvContent;
-    } else {
-      return toast({
-        title: "Error",
-        description: "Invalid input data",
-        duration: 5000,
+      payload.csvContent = data.csvContent;    } else {
+      return toast.error("Invalid input data", {
+        duration: 5000
       });
     }
   
-    // Pre-check coin balance
+  // Pre-check coin balance
     if (hasInsufficientCoins) {
-      return toast({
-        title: "Insufficient Coins",
-        description: `You need ${coinCostEstimate} coins, but you have ${userCoinBalance || 0}.`,
-        duration: 5000,
+      return toast.error(`Insufficient Coins: You need ${coinCostEstimate} coins, but you have ${userCoinBalance || 0}.`, {
+        duration: 5000
       });
     }
   
     // Kick off processing (coins will be deducted inside)
     try {
-      await processRequest(payload);
-    } catch (err: any) {
+      await processRequest(payload);    } catch (err: any) {
       // console.error(err);
-      toast({
-        title: "Error",
-        description: err.message || "Failed to process request",
-        duration: 5000,
+      toast.error(err.message || "Failed to process request", {
+        duration: 5000
       });
     }
   };
@@ -240,13 +260,10 @@ export default function Home() {
         let coinCost = payload.coinCostEstimate || 1;
         
         // Deduct coins
-        const deductResult = coinDeductionFunction(coinCost);
-        if (!deductResult.success) {
+        const deductResult = coinDeductionFunction(coinCost);        if (!deductResult.success) {
           clearInterval(progressInterval);
-          toast({
-            title: "Insufficient Free Coins",
-            description: "You've used all your free coins. Sign up for more!",
-            duration: 5000,
+          toast.error("Insufficient Free Coins: You've used all your free coins. Sign up for more!", {
+            duration: 5000
           });
           setActiveTab("input");
           return;
@@ -285,13 +302,10 @@ export default function Home() {
       if (!response.ok) {
         const errorData = await response.json();
         // console.error("[ERROR] Extract API error:", errorData);
-        
-        // Check if this is an insufficient funds error
+          // Check if this is an insufficient funds error
         if (errorData.requireMoreCoins) {
-          toast({
-            title: "Insufficient Coins",
-            description: "You don't have enough coins for this operation. Please add more coins to your account.",
-            duration: 5000,
+          toast.error("Insufficient Coins: You don't have enough coins for this operation. Please add more coins to your account.", {
+            duration: 5000
           });
           setActiveTab("input");
           return;
@@ -346,11 +360,8 @@ export default function Home() {
             // Update UI with new balance
             setUserCoinBalance(updatedData?.balance || 0);
           }
-          
-          toast({
-            title: "Processing Complete",
-            description: `${payload.coinCostEstimate} coins used for subtitle extraction`,
-            duration: 3000,
+            toast.success(`Processing Complete: ${payload.coinCostEstimate} coins used for subtitle extraction`, {
+            duration: 3000
           });
         } catch (error) {
           // console.error("[ERROR] Error fetching updated balance:", error);
@@ -360,23 +371,17 @@ export default function Home() {
             duration: 3000,
           });
         }
-      } else {
-        // No subtitles found
+      } else {        // No subtitles found
         // console.warn("[WARNING] No subtitles found in the response");
-        toast({
-          title: "No Results",
-          description: "No subtitles were found for the provided video(s).",
-          duration: 5000,
+        toast.error("No Results: No subtitles were found for the provided video(s).", {
+          duration: 5000
         });
         setActiveTab("input");
       }
-  
     } catch (error: any) {
       // console.error("[ERROR] Process Error:", error);
-      toast({
-        title: "Error",
-        description: error.message || "Processing failed",
-        duration: 5000,
+      toast.error(error.message || "Processing failed", {
+        duration: 5000
       });
       setActiveTab("input");
     } finally {
@@ -616,19 +621,14 @@ export default function Home() {
       
       // Cleanup
       setTimeout(() => URL.revokeObjectURL(url), 100);
-      
-      // Show success toast
-      toast({
-        title: "Download Complete",
-        description: "ZIP archive has been downloaded successfully",
-        duration: 3000,
+        // Show success toast
+      toast.success("Download Complete: ZIP archive has been downloaded successfully", {
+        duration: 3000
       });
     } catch (error) {
       // console.error("Error creating ZIP file:", error);
-      toast({
-        title: "Download Failed",
-        description: "Failed to create ZIP archive. Please try again.",
-        duration: 5000,
+      toast.error("Download Failed: Failed to create ZIP archive. Please try again.", {
+        duration: 5000
       });
     }
   };
@@ -705,14 +705,13 @@ export default function Home() {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="input" className="space-y-6 mt-4 animate-fade-in">
-                <InputSection
+              <TabsContent value="input" className="space-y-6 mt-4 animate-fade-in">                <InputSection
                   onSubmit={handleSubmit}
                   onInputChange={handleInputChange}
+                  onInputDataChange={handleInputDataChange}
                   onChangeTab={() => setActiveTab("processing")}
                   isProcessing={isProcessing}
-                />
-                <FormatSelection
+                />                <FormatSelection
                   onFormatChange={setSelectedFormats}
                   onLanguageChange={setSelectedLanguage}
                   selectedFormats={selectedFormats}
@@ -738,61 +737,8 @@ export default function Home() {
                 )}
                 
                 {/* Added back the Start Processing button */}
-                <div className="flex justify-end">
-                  <Button
-                    onClick={() => {
-                      if (document.getElementById("youtube-url")) {
-                        // URL input mode
-                        const urlInput = document.getElementById("youtube-url") as HTMLInputElement;
-                        if (urlInput && urlInput.value) {
-                          handleSubmit({
-                            inputType: "url",
-                            url: urlInput.value
-                          });
-                        } else {
-                          toast.error("Please enter a YouTube URL", {
-                            duration: 3000
-                          });
-                        }
-                      } else {
-                        // File input mode - get the file data from csvContent state
-                        const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-                        if (fileInput && fileInput.files && fileInput.files[0]) {
-                          // Find the InputSection component and call its handleSubmit method
-                          const handleSubmitClick = () => {
-                            // Access the InputSection's exported handleSubmit
-                            if (fileInput.files && fileInput.files[0]) {
-                              // We need to trigger file validation and submission
-                              const fileEvent = new Event('change', { bubbles: true });
-                              fileInput.dispatchEvent(fileEvent);
-                              
-                              // Since we can't directly call the component's internal method,
-                              // we rely on the props we passed to it
-                              const file = fileInput.files[0];
-                              const reader = new FileReader();
-                              reader.onload = (e) => {
-                                if (e.target && typeof e.target.result === 'string') {
-                                  handleSubmit({
-                                    inputType: "file",
-                                    file: file,
-                                    csvContent: e.target.result
-                                  });
-                                }
-                              };
-                              reader.readAsText(file);
-                            }
-                          };
-                          
-                          handleSubmitClick();
-                        } else {
-                          toast({
-                            title: "Error", 
-                            description: "Please upload a CSV file",
-                            duration: 3000,
-                          });
-                        }
-                      }
-                    }}
+                <div className="flex justify-end">                  <Button
+                    onClick={handleStartProcessing}
                     disabled={isProcessing || hasInsufficientCoins || isLoadingCoins}
                     className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 shadow px-4 py-2 w-full bg-black hover:bg-black/90 text-white h-11"
                   >

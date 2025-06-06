@@ -244,6 +244,7 @@ function parseVttContent(vttContent: string): TranscriptItem[] {
   let currentText = '';
   let currentStart = 0;
   let currentDuration = 0;
+  let inSubtitleBlock = false;
   
   // Skip the header lines (WEBVTT and other metadata)
   let i = 0;
@@ -257,43 +258,110 @@ function parseVttContent(vttContent: string): TranscriptItem[] {
     
     // Time line (start --> end)
     if (line.includes('-->')) {
-      const [startTime, endTime] = line.split('-->').map(t => t.trim());
-      currentStart = parseVttTime(startTime);
-      const end = parseVttTime(endTime);
-      currentDuration = end - currentStart;
+      // Save previous block if it exists
+      if (inSubtitleBlock && currentText) {
+        transcript.push({
+          text: cleanVttText(currentText),
+          offset: currentStart,
+          duration: currentDuration
+        });
+      }
       
-      // Reset text for this new block
+      // Parse timing, ignoring VTT positioning attributes
+      const timePart = line.split('-->');
+      if (timePart.length >= 2) {
+        const startTime = timePart[0].trim();
+        const endTimePart = timePart[1].trim().split(' ')[0]; // Remove positioning attributes
+        currentStart = parseVttTime(startTime);
+        const end = parseVttTime(endTimePart);
+        currentDuration = end - currentStart;
+      }
+      
+      // Reset for new block
       currentText = '';
+      inSubtitleBlock = true;
     }
     // Text line
-    else if (line && !line.match(/^\d+$/) && !line.match(/^WEBVTT/)) {
-      // Append this line to the current text, adding a space if needed
-      if (currentText) {
-        currentText += ' ';
+    else if (line && !line.match(/^\d+$/) && !line.match(/^WEBVTT/) && !line.match(/^Kind:|^Language:/)) {
+      // Skip lines that are just whitespace or positioning info
+      if (line.match(/^align:|^position:|^\s*$/)) {
+        continue;
       }
-      currentText += line;
+      
+      // For auto-generated subtitles, prefer lines without inline timing tags
+      // but if all lines have timing tags, we'll clean them
+      const hasTimingTags = line.includes('<') && line.includes('>');
+      const cleanedLine = cleanVttText(line);
+      
+      if (!hasTimingTags && cleanedLine) {
+        // Prefer clean lines without timing tags
+        currentText = cleanedLine;
+      } else if (!currentText && cleanedLine) {
+        // Use tagged line if it's the only option
+        currentText = cleanedLine;
+      }
+      // If we already have text and this line has timing tags, skip it
+      // (it's likely a duplicate with word-level timing)
     }
     // Empty line - end of a subtitle block
-    else if (!line && currentText) {
+    else if (!line && inSubtitleBlock && currentText) {
       transcript.push({
-        text: currentText,
+        text: cleanVttText(currentText),
         offset: currentStart,
         duration: currentDuration
       });
       currentText = '';
+      inSubtitleBlock = false;
     }
   }
-  
-  // Handle the last block if it exists
-  if (currentText) {
+    // Handle the last block if it exists
+  if (inSubtitleBlock && currentText) {
     transcript.push({
-      text: currentText,
+      text: cleanVttText(currentText),
       offset: currentStart,
       duration: currentDuration
     });
   }
+    // Post-process to remove duplicate entries that are common in auto-generated subtitles
+  const deduplicatedTranscript = [];
+  const seenTexts = new Set();
   
-  return transcript;
+  for (const item of transcript) {
+    const normalizedText = item.text.toLowerCase().trim();
+    
+    // Skip empty or very short text (likely artifacts)
+    if (normalizedText.length < 2) {
+      continue;
+    }
+    
+    // Skip if we've seen this exact text recently (within last 5 items)
+    const recentTexts = deduplicatedTranscript.slice(-5).map(t => t.text.toLowerCase().trim());
+    
+    if (!recentTexts.includes(normalizedText)) {
+      deduplicatedTranscript.push(item);
+      seenTexts.add(normalizedText);
+    }
+  }
+  
+  return deduplicatedTranscript;
+}
+
+// Clean VTT text by removing timing tags and other artifacts
+function cleanVttText(text: string): string {
+  if (!text) return '';
+  
+  return text
+    // Remove inline timing tags like <00:00:19.039><c> word</c>
+    .replace(/<\d{2}:\d{2}:\d{2}\.\d{3}>/g, '')
+    // Remove VTT cue tags like <c>, </c>, <v>, </v>
+    .replace(/<\/?[cv][^>]*>/g, '')
+    // Remove other HTML/XML tags
+    .replace(/<[^>]*>/g, '')
+    // Remove positioning info that might be in text
+    .replace(/align:start position:\d+%/g, '')
+    // Clean up whitespace
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 // Parse VTT timestamp to milliseconds
@@ -433,16 +501,108 @@ export function getLanguageName(code: string): string {
     'de': 'German',
     'it': 'Italian',
     'pt': 'Portuguese',
+    'pt-BR': 'Portuguese (Brazil)',
     'ru': 'Russian',
     'ja': 'Japanese',
     'ko': 'Korean',
     'zh': 'Chinese',
+    'zh-CN': 'Chinese (Simplified)',
+    'zh-TW': 'Chinese (Traditional)',
     'ar': 'Arabic',
     'hi': 'Hindi',
+    'nl': 'Dutch',
+    'pl': 'Polish',
+    'sv': 'Swedish',
+    'da': 'Danish',
+    'no': 'Norwegian',
+    'fi': 'Finnish',
+    'tr': 'Turkish',
+    'el': 'Greek',
+    'he': 'Hebrew',
+    'th': 'Thai',
+    'vi': 'Vietnamese',
+    'id': 'Indonesian',
+    'ms': 'Malay',
+    'uk': 'Ukrainian',
+    'cs': 'Czech',
+    'sk': 'Slovak',
+    'hu': 'Hungarian',
+    'ro': 'Romanian',
+    'bg': 'Bulgarian',
+    'hr': 'Croatian',
+    'sr': 'Serbian',
+    'sl': 'Slovenian',
+    'et': 'Estonian',
+    'lv': 'Latvian',
+    'lt': 'Lithuanian',
+    'mt': 'Maltese',
+    'bn': 'Bengali',
+    'ur': 'Urdu',
+    'fa': 'Persian',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'gu': 'Gujarati',
+    'kn': 'Kannada',
+    'ml': 'Malayalam',
+    'mr': 'Marathi',
+    'ne': 'Nepali',
+    'si': 'Sinhala',
+    'af': 'Afrikaans',
+    'sq': 'Albanian',
+    'am': 'Amharic',
+    'hy': 'Armenian',
+    'az': 'Azerbaijani',
+    'eu': 'Basque',
+    'be': 'Belarusian',
+    'bs': 'Bosnian',
+    'ca': 'Catalan',
+    'co': 'Corsican',
+    'cy': 'Welsh',
+    'eo': 'Esperanto',
+    'tl': 'Filipino',
+    'fy': 'Frisian',
+    'gl': 'Galician',
+    'ka': 'Georgian',
+    'ht': 'Haitian Creole',
+    'ha': 'Hausa',
+    'haw': 'Hawaiian',
+    'is': 'Icelandic',
+    'ig': 'Igbo',
+    'ga': 'Irish',
+    'jw': 'Javanese',
+    'kk': 'Kazakh',
+    'km': 'Khmer',
+    'ku': 'Kurdish',
+    'ky': 'Kyrgyz',
+    'lo': 'Lao',
+    'la': 'Latin',
+    'lb': 'Luxembourgish',
+    'mk': 'Macedonian',
+    'mg': 'Malagasy',
+    'mi': 'Maori',
+    'mn': 'Mongolian',
+    'my': 'Myanmar (Burmese)',
+    'ny': 'Chichewa',
+    'ps': 'Pashto',
+    'pa': 'Punjabi',
+    'sm': 'Samoan',
+    'gd': 'Scottish Gaelic',
+    'sn': 'Shona',
+    'sd': 'Sindhi',
+    'so': 'Somali',
+    'st': 'Sesotho',
+    'su': 'Sundanese',
+    'sw': 'Swahili',
+    'tg': 'Tajik',
+    'tt': 'Tatar',
+    'uz': 'Uzbek',
+    'xh': 'Xhosa',
+    'yi': 'Yiddish',
+    'yo': 'Yoruba',
+    'zu': 'Zulu',
     'auto': 'Auto-detected'
   };
-  
-  return languages[code] || code;
+    return languages[code] || code;
 }
 
 // Function to fetch video IDs from a YouTube playlist using a web-based approach instead of yt-dlp

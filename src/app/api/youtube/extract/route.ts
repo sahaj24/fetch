@@ -13,7 +13,10 @@ import {
   processBatchWithConcurrency,
   SubtitleResult,
   TranscriptItem,
-  getLanguageName
+  getLanguageName,
+  getAvailableLanguages,
+  getVideoDefaultLanguage,
+  AvailableLanguage
 } from "./utils";
 import { OPERATION_COSTS } from "@/app/coins/utils";
 import { supabase } from "@/supabase/config";
@@ -220,16 +223,30 @@ async function formatTranscript(transcript: any[], format: string, videoTitle: s
   if (!transcript || transcript.length === 0) {
     throw new Error("No transcript data available");
   }
-  
-  // Create a helper function to decode HTML entities for all formats
+    // Create a helper function to decode HTML entities for all formats
   const decodeHtmlEntities = (text: string): string => {
     return text
+      // Handle double-encoded entities first (like &amp;#39;)
+      .replace(/&amp;#(\d+);/g, (match, dec) => String.fromCharCode(parseInt(dec)))
+      .replace(/&amp;#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+      // Handle standard named entities
       .replace(/&amp;/g, '&')
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>')
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
-      .replace(/&nbsp;/g, ' ');
+      .replace(/&apos;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      // Handle numbered entities
+      .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(parseInt(dec)))
+      .replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+      // Handle common special cases
+      .replace(/&rsquo;/g, "'")
+      .replace(/&lsquo;/g, "'")
+      .replace(/&rdquo;/g, '"')
+      .replace(/&ldquo;/g, '"')
+      .replace(/&mdash;/g, '—')
+      .replace(/&ndash;/g, '–');
   };
   
   // Pre-process all transcript items to decode HTML entities
@@ -269,104 +286,144 @@ async function formatTranscript(transcript: any[], format: string, videoTitle: s
   } else if (format === "PARAGRAPH") {
     // Single paragraph format - everything in one continuous text
     // Convert line breaks to spaces for a flowing paragraph
-    formattedContent = cleanTranscript.map(item => item.text.replace(/\n/g, ' ')).join(' ');
-  } else if (format === "CLEAN_TEXT") {
+    formattedContent = cleanTranscript.map(item => item.text.replace(/\n/g, ' ')).join(' ');  } else if (format === "CLEAN_TEXT") {
     // Clean text format - properly formatted and readable text
-    // Step 1: Extract all text without timestamps and clean XML/HTML tags
+    // Step 1: Extract all text and clean it thoroughly
     let rawText = cleanTranscript.map(item => {
-      // First remove all XML/HTML tags, including those with timestamps
+      // Clean any remaining VTT artifacts and XML/HTML tags
       let cleanedText = item.text
-        // Remove timestamp and <c> tags
+        // Remove any remaining timestamp and VTT tags that might have been missed
         .replace(/<\d{2}:\d{2}:\d{2}\.\d{3}>/g, '') 
-        .replace(/<c>/g, '')
-        .replace(/<\/c>/g, '')
-        // Remove any other XML/HTML tags that might be present
+        .replace(/<\/?[cv][^>]*>/g, '')
         .replace(/<[^>]*>/g, '')
+        // Remove VTT positioning info
+        .replace(/align:start position:\d+%/g, '')
+        // Remove common auto-generated subtitle artifacts
+        .replace(/\[Music\]/gi, '')
+        .replace(/\[Applause\]/gi, '')
+        .replace(/\[Laughter\]/gi, '')
+        .replace(/\[Silence\]/gi, '')
         // Replace newlines with spaces
-        .replace(/\n/g, ' ');
+        .replace(/\n/g, ' ')
+        // Clean up multiple spaces
+        .replace(/\s+/g, ' ');
       
-      return cleanedText;
-    }).join(' ');
+      return cleanedText.trim();
+    }).filter(text => text.length > 0).join(' ');
     
-    // Remove repeated phrases that often occur in auto-generated captions
-    // This pattern looks for identical phrases separated by a comma or other punctuation
-    rawText = rawText.replace(/(\b\w[\w\s]{10,}\w\b)[,.;:]\s+\1/g, '$1');
+    // Step 2: Remove duplicate phrases and repetitions common in auto-generated captions
+    // This pattern looks for identical phrases that often repeat in auto-generated subtitles
+    const words = rawText.split(' ');
+    const deduplicatedWords = [];
+    const windowSize = 8; // Look for repetitions within 8 words
     
-    // Fix doubled spaces and clean up
-    rawText = rawText.replace(/\s{2,}/g, ' ').trim();
-    
-    // Step 2: Fix common punctuation issues
-    rawText = rawText
-      // Fix spacing after punctuation
-      .replace(/([.!?])([a-zA-Z])/g, '$1 $2')
-      // Fix capitalization after periods, question marks, and exclamation points
-      .replace(/([.!?]\s+)([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase())
-      // Remove extra spaces
-      .replace(/\s+/g, ' ').trim();
-    
-    // Step 3: Add paragraph breaks at logical points (after sentences with keywords that often end paragraphs)
-    const paragraphBreakKeywords = [
-      'in conclusion', 'to summarize', 'finally,', 'lastly,', 'in summary',
-      'overall,', 'all in all', 'in the end', 'to conclude', "let's jump",
-      'moving on', 'next,', 'first,', 'second,', 'third,', 'furthermore',
-      'additionally', 'moreover', 'therefore', 'consequently', 'as a result',
-      'thus,', 'hence', 'accordingly', 'for instance', 'for example'
-    ];
-    
-    // Add paragraph breaks at sentence boundaries that contain these keywords
-    const sentenceRegex = /([.!?])\s+/g;
-    let sentences = rawText.split(sentenceRegex);
-    let paragraphedText = '';
-    let currentParagraph = '';
-    
-    // Process each sentence
-    for (let i = 0; i < sentences.length; i += 2) {
-      const sentence = sentences[i];
-      const punctuation = sentences[i + 1] || '';
+    for (let i = 0; i < words.length; i++) {
+      const currentWord = words[i];
+      // Check if this word sequence already appeared recently
+      let isDuplicate = false;
+      if (i >= windowSize) {
+        for (let j = 1; j <= windowSize && i - j >= 0; j++) {
+          if (words[i - j] === currentWord && 
+              i + 1 < words.length && i - j + 1 < words.length &&
+              words[i + 1] === words[i - j + 1]) {
+            // Found a potential duplicate sequence, check a few more words
+            let matchLength = 0;
+            for (let k = 0; k < 4 && i + k < words.length && i - j + k < words.length; k++) {
+              if (words[i + k] === words[i - j + k]) {
+                matchLength++;
+              } else {
+                break;
+              }
+            }
+            if (matchLength >= 2) {
+              isDuplicate = true;
+              break;
+            }
+          }
+        }
+      }
       
-      // Check if this sentence contains a paragraph break keyword
-      const shouldBreakParagraph = paragraphBreakKeywords.some(keyword => 
-        sentence.toLowerCase().includes(keyword)
-      );
-      
-      // Add sentence to current paragraph
-      currentParagraph += sentence + punctuation + ' ';
-      
-      // Add paragraph break if needed (or every ~5-8 sentences to avoid overly long paragraphs)
-      if (shouldBreakParagraph || (i > 0 && i % (10 + Math.floor(Math.random() * 6)) === 0)) {
-        paragraphedText += currentParagraph.trim() + '\n\n';
-        currentParagraph = '';
+      if (!isDuplicate) {
+        deduplicatedWords.push(currentWord);
       }
     }
     
-    // Add the final paragraph
-    if (currentParagraph) {
+    rawText = deduplicatedWords.join(' ');
+    
+    // Step 3: Fix common punctuation and capitalization issues
+    rawText = rawText
+      // Fix spacing around punctuation
+      .replace(/\s+([.!?,:;])/g, '$1')
+      .replace(/([.!?])\s*([a-z])/g, '$1 $2')
+      // Fix capitalization after sentence endings
+      .replace(/([.!?]\s+)([a-z])/g, (match, p1, p2) => p1 + p2.toUpperCase())
+      // Fix common transcription errors for contractions
+      .replace(/\bwont\b/g, "won't")
+      .replace(/\bdont\b/g, "don't")
+      .replace(/\bcant\b/g, "can't")
+      .replace(/\bweve\b/g, "we've")
+      .replace(/\btheyre\b/g, "they're")
+      .replace(/\byoure\b/g, "you're")
+      .replace(/\bits\b/g, "it's")
+      .replace(/\bim\b/gi, "I'm")
+      // Remove extra spaces
+      .replace(/\s+/g, ' ')
+      .trim();
+    
+    // Step 4: Add paragraph breaks at logical points
+    const sentences = rawText.split(/([.!?]+\s+)/);
+    let paragraphedText = '';
+    let currentParagraph = '';
+    let sentenceCount = 0;
+    
+    for (let i = 0; i < sentences.length; i += 2) {
+      const sentence = sentences[i] || '';
+      const punctuation = sentences[i + 1] || '';
+      
+      if (sentence.trim()) {
+        currentParagraph += sentence + punctuation;
+        sentenceCount++;
+        
+        // Create paragraph breaks every 4-6 sentences or at transition words
+        const hasTransition = /\b(however|meanwhile|furthermore|moreover|therefore|consequently|in conclusion|finally|next|first|second|third)\b/i.test(sentence);
+        
+        if (sentenceCount >= 4 && (sentenceCount >= 6 || hasTransition || Math.random() > 0.7)) {
+          paragraphedText += currentParagraph.trim() + '\n\n';
+          currentParagraph = '';
+          sentenceCount = 0;
+        }
+      }
+    }
+    
+    // Add remaining content
+    if (currentParagraph.trim()) {
       paragraphedText += currentParagraph.trim();
     }
     
-    // Step 4: Remove filler words and expressions
-    const fillerWords = [
-      /\bum,?\b/gi, /\buh,?\b/gi, /\blike,?\b/gi, /\byou know,?\b/gi, 
-      /\bI mean,?\b/gi, /\bbasically,?\b/gi, /\bliterally,?\b/gi,
-      /\bactually,?\b/gi, /\bso,?\b/gi, /\bjust,?\b/gi, /\bkind of\b/gi,
-      /\bsort of\b/gi
+    // Step 5: Remove common filler words (but preserve meaning)
+    const excessiveFillers = [
+      /\bum,?\s+/gi, 
+      /\buh,?\s+/gi, 
+      /\byou know,?\s+/gi,
+      /\bI mean,?\s+/gi,
+      /\bbasically,?\s+/gi,
+      /\bliterally,?\s+/gi
     ];
     
     formattedContent = paragraphedText;
-    fillerWords.forEach(word => {
-      formattedContent = formattedContent.replace(word, ' ');
+    excessiveFillers.forEach(filler => {
+      formattedContent = formattedContent.replace(filler, ' ');
     });
     
-    // Final cleanup - fix any remaining issues
+    // Final cleanup
     formattedContent = formattedContent
-      .replace(/\s+/g, ' ')                  // Remove extra spaces
-      .replace(/\s+\./g, '.')                // Fix spaces before periods
-      .replace(/\s+,/g, ',')                 // Fix spaces before commas
-      .replace(/\n\s+/g, '\n')               // Remove spaces at start of lines
-      .replace(/\n{3,}/g, '\n\n')            // Limit to max double line breaks
+      .replace(/\s+/g, ' ')
+      .replace(/\s+([.!?,:;])/g, '$1')
+      .replace(/\n\s+/g, '\n')
+      .replace(/\n{3,}/g, '\n\n')
       .trim();
     
-    // Ensure first letter of each paragraph is capitalized
+    // Ensure proper capitalization
     formattedContent = formattedContent
       .split('\n\n')
       .map(paragraph => {
@@ -374,8 +431,7 @@ async function formatTranscript(transcript: any[], format: string, videoTitle: s
           return paragraph.charAt(0).toUpperCase() + paragraph.slice(1);
         }
         return paragraph;
-      })
-      .join('\n\n');
+      })      .join('\n\n');
     
   } else if (format === "JSON") {
     // JSON format with more detailed information
@@ -901,12 +957,28 @@ export async function POST(req: NextRequest) {
     // Track processing start time for performance monitoring
     const startTime = Date.now();
     let subtitles = [];
-    let processingStats = { totalVideos: 0, processedVideos: 0, errorCount: 0 };
-
-    // Process based on input type
+    let processingStats = { totalVideos: 0, processedVideos: 0, errorCount: 0 };    // Process based on input type
     if (inputType === "url" && url) {
       console.log(`Processing YouTube URL: ${url} with formats: ${formats.join(', ')} in language: ${language}`);
-      subtitles = await processYouTubeUrl(url, formats, language);
+      
+      // For single video URLs, try to use detected default language if available
+      let actualLanguage = language;
+      const videoId = extractVideoId(url);
+      
+      if (videoId && !videoId.startsWith('playlist:') && !videoId.startsWith('channel:')) {
+        // This is a single video - try to get the default language
+        try {
+          const defaultLanguage = await getVideoDefaultLanguage(videoId);
+          if (defaultLanguage && defaultLanguage !== 'en') {
+            console.log(`Using detected default language: ${defaultLanguage} instead of requested: ${language}`);
+            actualLanguage = defaultLanguage;
+          }
+        } catch (error) {
+          console.log(`Could not detect default language for ${videoId}, using requested: ${language}`);
+        }
+      }
+      
+      subtitles = await processYouTubeUrl(url, formats, actualLanguage);
       // Calculate stats for successful subtitles
       const validSubtitles = subtitles as SubtitleResult[];
       processingStats.totalVideos = validSubtitles.length / formats.length;

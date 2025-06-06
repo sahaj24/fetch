@@ -37,6 +37,12 @@ interface InputSectionProps {
     videoCount: number;
     isPlaylist: boolean;
   }) => void;
+  onInputDataChange?: (data: {
+    inputType: "url" | "file";
+    url?: string;
+    file?: File;
+    csvContent?: string;
+  } | null) => void;
   onChangeTab?: (tab: string) => void;
   isProcessing?: boolean;
 }
@@ -50,6 +56,7 @@ interface PlaylistInfo {
 export default function InputSection({
   onSubmit = () => {},
   onInputChange = () => {},
+  onInputDataChange = () => {},
   onChangeTab = () => {},
   isProcessing = false,
 }: InputSectionProps) {
@@ -190,9 +197,32 @@ export default function InputSection({
       onInputChange({
         videoCount: totalEstimatedVideos,
         isPlaylist: csvStats.playlistCount > 0 || csvStats.channelCount > 0
-      });
-    }
+      });    }
   }, [csvStats, inputType, onInputChange]);
+  // Effect to notify parent of URL input data changes
+  useEffect(() => {
+    if (inputType === "url" && url.trim()) {
+      onInputDataChange({
+        inputType: "url",
+        url: url.trim()
+      });
+    } else if (inputType === "url" && !url.trim()) {
+      onInputDataChange(null);
+    }
+  }, [url, inputType]); // Removed onInputDataChange from dependencies
+
+  // Effect to notify parent of file input data changes
+  useEffect(() => {
+    if (inputType === "file" && file && csvContent) {
+      onInputDataChange({
+        inputType: "file",
+        file,
+        csvContent
+      });
+    } else if (inputType === "file" && !file) {
+      onInputDataChange(null);
+    }
+  }, [file, csvContent, inputType]); // Removed onInputDataChange from dependencies
 
   // Function to analyze CSV content and extract YouTube URLs
   const analyzeCSVContent = async (content: string) => {

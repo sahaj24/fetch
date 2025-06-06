@@ -92,61 +92,49 @@ const FormatSelection = ({
         { id: "smi", label: "SMI", value: "SMI", description: "SAMI format for synchronized text", icon: <Clock size={14} /> },
       ]
     },
-  ];
-
-  // Define types for languages and regions
-  type Language = {
-    value: string;
-    label: string;
-    popular?: boolean;
-  };
-
-  type LanguageRegion = {
-    name: string;
-    label: string;
-    languages: Language[];
-  };
-
-  // Language options grouped by region for better UX
-  const languageRegions: LanguageRegion[] = [
-    {
-      name: "popular",
-      label: "Popular",
-      languages: [
-        { value: "en", label: "English", popular: true },
-      ]
-    },
-    {
-      name: "european",
-      label: "European",
-      languages: [
-        { value: "en", label: "English" },
-        { value: "es", label: "Spanish" },
-        { value: "fr", label: "French" },
-        { value: "de", label: "German" },
-        { value: "it", label: "Italian" },
-        { value: "pt", label: "Portuguese" },
-        { value: "ru", label: "Russian" },
-      ]
-    },
-    {
-      name: "asian",
-      label: "Asian",
-      languages: [
-        { value: "ja", label: "Japanese" },
-        { value: "ko", label: "Korean" },
-        { value: "zh", label: "Chinese" },
-        { value: "hi", label: "Hindi" },
-      ]
-    },
-    {
-      name: "other",
-      label: "Other",
-      languages: [
-        { value: "ar", label: "Arabic" },
-      ]
-    },
-  ];
+  ];  // Static language options - comprehensive list with English as default
+  const languageOptions = [
+    { code: "en", name: "English" },
+    { code: "es", name: "Spanish" },
+    { code: "fr", name: "French" },
+    { code: "de", name: "German" },
+    { code: "it", name: "Italian" },
+    { code: "pt", name: "Portuguese" },
+    { code: "pt-BR", name: "Portuguese (Brazil)" },
+    { code: "ru", name: "Russian" },
+    { code: "ja", name: "Japanese" },
+    { code: "ko", name: "Korean" },
+    { code: "zh", name: "Chinese" },
+    { code: "zh-CN", name: "Chinese (Simplified)" },
+    { code: "zh-TW", name: "Chinese (Traditional)" },
+    { code: "ar", name: "Arabic" },
+    { code: "hi", name: "Hindi" },
+    { code: "nl", name: "Dutch" },
+    { code: "pl", name: "Polish" },
+    { code: "sv", name: "Swedish" },
+    { code: "da", name: "Danish" },
+    { code: "no", name: "Norwegian" },
+    { code: "fi", name: "Finnish" },
+    { code: "tr", name: "Turkish" },
+    { code: "el", name: "Greek" },
+    { code: "he", name: "Hebrew" },
+    { code: "th", name: "Thai" },
+    { code: "vi", name: "Vietnamese" },
+    { code: "id", name: "Indonesian" },
+    { code: "ms", name: "Malay" },
+    { code: "uk", name: "Ukrainian" },
+    { code: "cs", name: "Czech" },
+    { code: "sk", name: "Slovak" },
+    { code: "hu", name: "Hungarian" },
+    { code: "ro", name: "Romanian" },
+    { code: "bg", name: "Bulgarian" },
+    { code: "hr", name: "Croatian" },
+    { code: "sr", name: "Serbian" },
+    { code: "sl", name: "Slovenian" },
+    { code: "et", name: "Estonian" },
+    { code: "lv", name: "Latvian" },
+    { code: "lt", name: "Lithuanian" },
+    { code: "auto", name: "Auto-detected" },  ];
 
   const handleFormatChange = (format: string, checked: boolean) => {
     let updatedFormats: string[];
@@ -171,17 +159,8 @@ const FormatSelection = ({
     setLanguage(value);
     onLanguageChange(value);
   };
-
   // Extract all format options for the main format selection logic
   const allFormatOptions = formatCategories.flatMap(category => category.formats);
-
-  // Extract all language options across regions
-  const allLanguageOptions = languageRegions.flatMap(region => region.languages);
-
-  // Get all unique language options without duplicates
-  const uniqueLanguageOptions = allLanguageOptions.filter((lang, index, self) => 
-    index === self.findIndex(t => t.value === lang.value)
-  );
 
   // Generic format formatter for consistent rendering
   const FormatCard = ({ format, selected }: { format: { id: string; label: string; value: string; description: string; icon?: React.ReactNode; popular?: boolean; }, selected: boolean }) => (
@@ -312,35 +291,26 @@ const FormatSelection = ({
               <div className="flex items-center gap-2">
                 <Languages size={16} className="text-primary" />
                 <h3 className="font-medium">Subtitle Language</h3>
-              </div>
-
-              <Select value={language} onValueChange={handleLanguageChange}>
+              </div>              <Select value={language} onValueChange={handleLanguageChange}>
                 <SelectTrigger className="w-full bg-white/80 border-black/10 shadow-sm h-11 input-focus-ring">
                   <SelectValue placeholder="Select language" />
                 </SelectTrigger>
                 <SelectContent className="max-h-96">
-                  {/* Language availability disclaimer */}
-                  <div className="px-3 py-2 border-b">
-                    <p className="text-xs text-muted-foreground">
-                      <strong>Note:</strong> If subtitles are not available in your chosen language, English will be used as a fallback.
-                    </p>
-                  </div>
-                  
-                  {languageRegions.map((region) => (
-                    <div key={region.name} className="px-2 py-1.5">
-                      <div className="text-xs font-semibold text-muted-foreground mb-1 pl-2">{region.label}</div>
-                      <div className="grid grid-cols-1 gap-1">
-                        {region.languages.map((lang) => (
-                          <SelectItem 
-                            key={`${region.name}-${lang.value}`} 
-                            value={lang.value}
-                            className={lang.popular ? 'font-medium' : ''}
-                          >
-                            {lang.label} {lang.popular && <span className="text-xs text-primary ml-1">•</span>}
-                          </SelectItem>
-                        ))}
+                  {languageOptions.map((lang) => (
+                    <SelectItem 
+                      key={lang.code} 
+                      value={lang.code}
+                      className={lang.code === 'en' ? 'font-medium' : ''}
+                    >
+                      <div className="flex items-center gap-2">
+                        {lang.name}
+                        {lang.code === 'en' && (
+                          <Badge variant="outline" className="text-xs bg-primary/10 text-primary">
+                            Default
+                          </Badge>
+                        )}
                       </div>
-                    </div>
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
