@@ -128,78 +128,15 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
     
     console.log(`🔥 [COIN DEDUCTION] Starting deduction - userId=${userId}, operation=${operationType}, amount=${coinsToDeduct}`);
 
-    // 1. First check if user exists and get current balance
+    // 1. Get user's current balance using maybeSingle to avoid RLS errors
     const { data: currentData, error: fetchError } = await supabase
       .from('user_coins')
       .select('balance, subscription_tier')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
       
     if (fetchError) {
       console.error('❌ [COIN DEDUCTION] Error fetching user coins data:', fetchError);
-      console.error('❌ [COIN DEDUCTION] Error code:', fetchError.code);
-      console.error('❌ [COIN DEDUCTION] Error details:', fetchError.details);
-      
-      // CRITICAL FIX: Only create new users for truly new accounts, not existing users with lookup issues
-      if (fetchError.code === 'PGRST116') { // No rows returned
-        console.log('🔍 [COIN DEDUCTION] No user record found. Checking if this is truly a new user or a lookup issue...');
-        
-        // Before creating a new user, let's try to initialize them through the safer initializeUserCoins function
-        console.log('🔧 [COIN DEDUCTION] Attempting to initialize user coins instead of creating new record');
-        const initialBalance = await initializeUserCoins(userId);
-        
-        if (initialBalance === null) {
-          console.error('❌ [COIN DEDUCTION] Failed to initialize user coins');
-          return {
-            success: false,
-            error: 'Failed to initialize user account',
-            errorType: 'DATABASE_ERROR'
-          };
-        }
-        
-        console.log(`✅ [COIN DEDUCTION] User initialized with balance: ${initialBalance}`);
-        
-        // Now check if they have enough coins
-        if (initialBalance < coinsToDeduct) {
-          return {
-            success: false,
-            error: `Insufficient coins. Required: ${coinsToDeduct}, Available: ${initialBalance}`,
-            errorType: 'INSUFFICIENT_COINS',
-            currentBalance: initialBalance,
-            requiredAmount: coinsToDeduct
-          };
-        }
-        
-        // Proceed with deduction for initialized user
-        const newBalance = initialBalance - coinsToDeduct;
-        
-        // Use the secure spend_user_coins function
-        const spendTransactionId = `${operationType.toLowerCase()}_${Date.now()}`;
-        const { error: spendError } = await supabase.rpc('spend_user_coins', {
-          p_user_id: userId,
-          p_amount: coinsToDeduct,
-          p_transaction_id: spendTransactionId,
-          p_description: `${operationType} operation`,
-          p_created_at: new Date().toISOString()
-        });
-        
-        if (spendError) {
-          console.error('❌ [COIN DEDUCTION] Error spending coins for initialized user:', spendError);
-          return {
-            success: false,
-            error: `Failed to spend coins: ${spendError.message}`,
-            errorType: 'DATABASE_ERROR'
-          };
-        }
-        
-        console.log(`✅ [COIN DEDUCTION] Successfully deducted ${coinsToDeduct} coins from initialized user ${userId}. New balance: ${newBalance}`);
-        return {
-          success: true,
-          currentBalance: newBalance,
-          newBalance
-        };
-      }
-      
       return {
         success: false,
         error: `Database error: ${fetchError.message}`,
@@ -208,10 +145,11 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
     }
     
     if (!currentData) {
-      console.error('❌ [COIN DEDUCTION] User coins record not found after successful query');
+      console.error('❌ [COIN DEDUCTION] User coins record not found. This should not happen for existing users.');
+      console.error('❌ [COIN DEDUCTION] The user might not be properly initialized or there is an ID mismatch.');
       return {
         success: false,
-        error: 'User coins record not found',
+        error: 'User account not found. Please contact support.',
         errorType: 'DATABASE_ERROR'
       };
     }
@@ -233,9 +171,9 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       };
     }
 
-    const newBalance = currentBalance - coinsToDeduct;
+    const expectedNewBalance = currentBalance - coinsToDeduct;
 
-    console.log(`💰 [COIN DEDUCTION] PROCEEDING WITH DEDUCTION: ${coinsToDeduct} coins for user ${userId}: ${currentBalance} -> ${newBalance}`);
+    console.log(`💰 [COIN DEDUCTION] PROCEEDING WITH DEDUCTION: ${coinsToDeduct} coins for user ${userId}: ${currentBalance} -> ${expectedNewBalance}`);
     
     // 2. Use the secure spend_user_coins RPC function that bypasses RLS
     const transactionId = `${operationType.toLowerCase()}_${Date.now()}`;
@@ -263,17 +201,17 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       .from('user_coins')
       .select('balance')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
       
     if (verifyData) {
-      console.log(`✅ [COIN DEDUCTION] Verified new balance: ${verifyData.balance} (expected: ${newBalance})`);
+      console.log(`✅ [COIN DEDUCTION] Verified new balance: ${verifyData.balance} (expected: ${expectedNewBalance})`);
     }
 
-    console.log(`🎉 [COIN DEDUCTION] FINAL RESULT: Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${newBalance}`);
+    console.log(`🎉 [COIN DEDUCTION] FINAL RESULT: Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${expectedNewBalance}`);
     return {
       success: true,
-      currentBalance: newBalance,
-      newBalance
+      currentBalance: expectedNewBalance,
+      newBalance: expectedNewBalance
     };
   } catch (error) {
     console.error('❌ [COIN DEDUCTION] CRITICAL ERROR in deductCoinsForOperation:', error);
