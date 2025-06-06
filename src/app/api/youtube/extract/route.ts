@@ -995,29 +995,39 @@ export async function POST(req: NextRequest) {
           
           // Get coin cost from the payload if available, otherwise calculate it
           let cost = 0;
-          
-          // Use the provided estimate if available instead of recalculating
+            // Use the provided estimate if available instead of recalculating
           if (body.coinCostEstimate && typeof body.coinCostEstimate === 'number') {
             cost = body.coinCostEstimate;
             console.log(`Using provided cost estimate: ${cost} coins`);
           } else {
-            // Calculate cost based on type and count
+            // Debug formats array
+            console.log(`[COST DEBUG] formats:`, formats);
+            console.log(`[COST DEBUG] formats.length:`, formats.length);
+            console.log(`[COST DEBUG] processingStats.processedVideos:`, processingStats.processedVideos);
+            console.log(`[COST DEBUG] OPERATION_COSTS.SINGLE_SUBTITLE:`, OPERATION_COSTS.SINGLE_SUBTITLE);
+            console.log(`[COST DEBUG] OPERATION_COSTS.BATCH_SUBTITLE:`, OPERATION_COSTS.BATCH_SUBTITLE);
+            
+            // Calculate cost based on type and count (FIXED: removed formats.length multiplication)
             if (inputType === "url") {
               if (processingStats.processedVideos > 1) {
-                // Batch rate for playlists/channels - multiply by formats.length since each format is a separate subtitle
-                cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE * formats.length;
+                // Batch rate for playlists/channels - cost per video, not per format
+                cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE;
+                console.log(`[COST DEBUG] Batch cost calculation: ${processingStats.processedVideos} * ${OPERATION_COSTS.BATCH_SUBTITLE} = ${cost}`);
               } else {
-                // Single video rate - multiply by formats.length since each format is a separate subtitle
-                cost = OPERATION_COSTS.SINGLE_SUBTITLE * formats.length;
+                // Single video rate - fixed cost regardless of formats
+                cost = OPERATION_COSTS.SINGLE_SUBTITLE;
+                console.log(`[COST DEBUG] Single video cost: ${OPERATION_COSTS.SINGLE_SUBTITLE}`);
               }
             } else if (inputType === "file") {
-              // CSV files always use batch rate - multiply by formats.length since each format is a separate subtitle
-              cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE * formats.length;
+              // CSV files always use batch rate - cost per video, not per format
+              cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE;
+              console.log(`[COST DEBUG] CSV cost calculation: ${processingStats.processedVideos} * ${OPERATION_COSTS.BATCH_SUBTITLE} = ${cost}`);
             }
             
             // Ensure minimum cost is 1 coin
             cost = Math.max(cost, 1);
-            console.log(`Cost = ${cost} coins`);          }
+            console.log(`[COST DEBUG] Final cost after minimum: ${cost} coins`);
+          }
             // Check if this is an anonymous user with free coins
           const isAnonymousUser = userId?.startsWith('anonymous-') || userId?.startsWith('test-anonymous-');
           
