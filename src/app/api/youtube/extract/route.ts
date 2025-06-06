@@ -1017,10 +1017,9 @@ export async function POST(req: NextRequest) {
             
             // Ensure minimum cost is 1 coin
             cost = Math.max(cost, 1);
-            console.log(`Cost = ${cost} coins`);
-          }
+            console.log(`Cost = ${cost} coins`);          }
             // Check if this is an anonymous user with free coins
-          const isAnonymousUser = userId?.startsWith('anonymous-');
+          const isAnonymousUser = userId?.startsWith('anonymous-') || userId?.startsWith('test-anonymous-');
           
           if (isAnonymousUser) {
             console.log(`Anonymous user ${userId} - not deducting coins`);
@@ -1084,11 +1083,10 @@ export async function POST(req: NextRequest) {
         processingStats.errorCount = validSubtitles.filter(s => s.error).length || 0;
           // Deduct coins for successfully processed videos
         if (userId && processingStats.processedVideos > 0) {
-          try {
-            console.log(`Attempting coin deduction for CSV processing for user ${userId}`);
+          try {            console.log(`Attempting coin deduction for CSV processing for user ${userId}`);
             
             // Check if this is an anonymous user with free coins
-            const isAnonymousUser = userId?.startsWith('anonymous-');
+            const isAnonymousUser = userId?.startsWith('anonymous-') || userId?.startsWith('test-anonymous-');
             
             if (isAnonymousUser) {
               console.log(`Anonymous user ${userId} - not deducting coins for CSV processing`);
