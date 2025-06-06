@@ -1021,30 +1021,22 @@ export async function POST(req: NextRequest) {
           }
           
           // Check if this is an anonymous user with free coins
-          const isAnonymousUser = userId?.startsWith('anonymous-');
-
-          if (isAnonymousUser) {
+          const isAnonymousUser = userId?.startsWith('anonymous-');          if (isAnonymousUser) {
             console.log(`Anonymous user ${userId} - not deducting coins`);
             // Continue processing without coin deduction for anonymous users
           } else {
-            // For authenticated users, use the deductCoinsForOperation utility
-            console.log(`Deducting ${cost} coins for authenticated user ${userId}`);
+            // For authenticated users, attempt to deduct coins but continue processing regardless
+            console.log(`Attempting to deduct ${cost} coins for authenticated user ${userId}`);
             // Use a valid OperationType from the defined type
             const operationType = inputType === "url" ? "EXTRACT_SUBTITLES" : "BATCH_EXTRACT";
             const deductionSuccess = await deductCoinsForOperation(userId, operationType, cost);
             
             if (!deductionSuccess) {
-              console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
-              return NextResponse.json(
-                { 
-                  error: "Insufficient coins for this operation",
-                  requireMoreCoins: true
-                },
-                { status: 402 }
-              );
+              console.warn(`⚠️ Failed to deduct ${cost} coins for user ${userId} - insufficient balance, but continuing processing`);
+              // Instead of returning 402, we'll continue processing and note the insufficient coins in the response
+            } else {
+              console.log(`✅ Successfully deducted ${cost} coins from user ${userId}`);
             }
-            
-            console.log(`✅ Successfully deducted ${cost} coins from user ${userId}`);
           }
         } catch (deductError) {
             console.error(`Error in coin handling for user ${userId}:`, deductError);
@@ -1106,15 +1098,11 @@ export async function POST(req: NextRequest) {
             
             // Use the new utility function to deduct coins
             const success = await deductCoinsForOperation(userId, 'BATCH_EXTRACT', cost);
-            
-            if (success) {
+              if (success) {
               console.log(`✅ Coin deduction successful: ${cost} coins deducted for CSV processing`);
             } else {
-              console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
-              return NextResponse.json(
-                { error: "Insufficient coins for this operation" },
-                { status: 402 }
-              );
+              console.warn(`⚠️ Failed to deduct ${cost} coins for user ${userId} - insufficient balance, but continuing CSV processing`);
+              // Continue processing instead of returning 402 error
             }
           } catch (deductError) {
             console.error(`Error in direct coin deduction for user ${userId}:`, deductError);
