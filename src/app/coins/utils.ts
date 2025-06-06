@@ -798,16 +798,10 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
     console.error("🚨 CRITICAL: Cannot get coins: No user ID provided");
     return null;
   }
-  
-  try {
+    try {
     console.log(`🔍 DEBUG: Getting coins for user ${userId}`);
     
-    // Check if the table exists first
-    await ensureUserCoinsTable();
-    
-    // Try to get from database
-    // Note: PostgreSQL treats quoted identifiers as case-sensitive
-    // Try with different case variations of the table name
+    // Try to get from database directly - the table exists in production
     console.log(`💾 DEBUG: Querying table with user_id=${userId}`);
     
     // Try 'user_coins' (snake_case - most common convention in PostgreSQL)

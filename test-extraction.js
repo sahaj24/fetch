@@ -16,14 +16,15 @@ async function testYouTubeExtraction() {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-user-id': anonymousUserId
+        'X-Anonymous-User': 'true'
       },
       body: JSON.stringify({
         inputType: 'url',
         url: testUrl,
         language: 'en',
         formats: ['CLEAN_TEXT'],
-        coinCostEstimate: 1
+        coinCostEstimate: 1,
+        anonymousId: anonymousUserId
       })
     });
     
