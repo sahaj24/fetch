@@ -51,6 +51,7 @@ interface PlaylistInfo {
   title?: string;
   videoCount?: number;
   isEstimate?: boolean;
+  error?: string; // Add error property to handle error states
 }
 
 export default function InputSection({
@@ -75,18 +76,31 @@ export default function InputSection({
   const [isPlaylist, setIsPlaylist] = useState(false);
   const [isLoadingPlaylistInfo, setIsLoadingPlaylistInfo] = useState(false);
   const [playlistInfo, setPlaylistInfo] = useState<PlaylistInfo | null>(null);
-  const [instantPlaylistInfo, setInstantPlaylistInfo] = useState<{ id: string; isValid: boolean } | null>(null);
-  // Function to extract playlist ID from URL
+  const [instantPlaylistInfo, setInstantPlaylistInfo] = useState<{ id: string; isValid: boolean } | null>(null);  // Function to extract playlist ID from URL - enhanced to support more formats
   const extractPlaylistId = (url: string): string | null => {
+    // Handle empty URLs
+    if (!url || url.trim().length === 0) return null;
+    
     // Extract playlist ID from various YouTube URL formats
     let match;
-    // Match playlist in the format ?list=PLAYLIST_ID
+    
+    // Case 1: Standard format with list parameter - ?list=PLAYLIST_ID or &list=PLAYLIST_ID
     match = url.match(/[&?]list=([^&]+)/i);
     if (match) return match[1];
     
-    // Match direct playlist URL format
+    // Case 2: Direct playlist URL format - /playlist?list=PLAYLIST_ID
     match = url.match(/\/playlist\?.*list=([^&]+)/i);
     if (match) return match[1];
+    
+    // Case 3: Short URL format - youtu.be/VIDEO_ID?list=PLAYLIST_ID
+    match = url.match(/youtu\.be\/[^?]+\?list=([^&]+)/i);
+    if (match) return match[1];
+    
+    // Case 4: Pure playlist ID pasted directly (not a URL)
+    // Only if it looks like a playlist ID (appropriate length and characters)
+    if (/^[A-Za-z0-9_-]{13,34}$/.test(url)) {
+      return url;
+    }
     
     return null;
   };
@@ -100,8 +114,7 @@ export default function InputSection({
     const isValid = /^[a-zA-Z0-9_-]+$/.test(playlistId) && playlistId.length > 10;
     
     return { id: playlistId, isValid };
-  };
-  // Function to fetch playlist info including video count (debounced)
+  };  // Function to fetch playlist info including video count (debounced)
   const fetchPlaylistInfo = async (url: string) => {
     const playlistId = extractPlaylistId(url);
     
@@ -115,21 +128,32 @@ export default function InputSection({
       
       if (response.ok) {
         const data = await response.json();
-        setPlaylistInfo(data);
         
-        // Update video count with actual count
-        if (data.videoCount && data.videoCount > 0) {
-          setVideoCount(data.videoCount);
+        // Validate response data
+        if (data && typeof data === 'object') {
+          setPlaylistInfo(data);
           
-          // Emit changes for coin calculation
-          onInputChange({
-            videoCount: data.videoCount,
-            isPlaylist: true
-          });
+          // Update video count with actual count
+          if (data.videoCount && data.videoCount > 0) {
+            setVideoCount(data.videoCount);
+            
+            // Emit changes for coin calculation
+            onInputChange({
+              videoCount: data.videoCount,
+              isPlaylist: true
+            });
+          }
+        } else {
+          throw new Error('Invalid response format');
         }
       } else {
-        console.error("Error fetching playlist info");
-        // Fall back to estimate
+        console.error("Error fetching playlist info:", response.status, response.statusText);
+        // Fall back to estimate with a better error message
+        setPlaylistInfo({
+          title: "Playlist",
+          videoCount: 10,
+          isEstimate: true
+        });
         setVideoCount(10);
         
         onInputChange({
@@ -140,6 +164,12 @@ export default function InputSection({
     } catch (error) {
       console.error("Error fetching playlist info:", error);
       // Fall back to estimate if fetch fails
+      setPlaylistInfo({
+        title: "Playlist",
+        videoCount: 10,
+        isEstimate: true,
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
       setVideoCount(10);
       
       onInputChange({
@@ -152,6 +182,15 @@ export default function InputSection({
   };  // Effect to update coin calculation when URL changes
   useEffect(() => {
     if (inputType === "url") {
+      // Reset playlist info if URL is cleared
+      if (!url.trim()) {
+        setInstantPlaylistInfo(null);
+        setPlaylistInfo(null);
+        setIsPlaylist(false);
+        setVideoCount(1);
+        return;
+      }
+      
       // Check for instant playlist info
       const instantInfo = getInstantPlaylistInfo(url);
       setInstantPlaylistInfo(instantInfo);
@@ -163,7 +202,7 @@ export default function InputSection({
       // Update state
       setIsPlaylist(isPlaylistUrl || isChannelUrl);
       
-      // Debounce playlist info fetching
+      // Debounce playlist info fetching to prevent excessive API calls
       const timeoutId = setTimeout(() => {
         // For playlists, fetch actual video count
         if (isPlaylistUrl && url.trim().length > 15) {
@@ -171,6 +210,11 @@ export default function InputSection({
         } else if (isChannelUrl) {
           // For channels, we'll estimate 15 videos by default
           setVideoCount(15);
+          setPlaylistInfo({
+            title: url.includes('@') ? url.split('@')[1]?.split('/')[0] || "Channel" : "YouTube Channel",
+            videoCount: 15,
+            isEstimate: true
+          });
           
           // Emit changes for coin calculation
           onInputChange({
@@ -188,7 +232,7 @@ export default function InputSection({
             isPlaylist: false
           });
         }
-      }, 300); // 300ms debounce
+      }, 500); // 500ms debounce to ensure users have finished typing
       
       return () => clearTimeout(timeoutId);
     }
@@ -469,52 +513,72 @@ export default function InputSection({
               Enter a YouTube playlist URL to batch process all videos in the playlist at once.
             </p>
           </div>
-          
-          {/* Instant playlist ID feedback */}
+            {/* Instant playlist ID feedback */}
           {instantPlaylistInfo && (
             <div className="mt-2 p-2 bg-green-50/70 border border-green-100 rounded-md">
               <div className="text-sm text-green-800">
-                <span className="font-medium">✓ Playlist detected</span>
-                <span className="text-xs text-green-600 block mt-0.5">
-                  ID: {instantPlaylistInfo.id} 
-                  {!instantPlaylistInfo.isValid && " (format may be invalid)"}
-                </span>
+                <span className="font-medium">Playlist</span>
+                {!instantPlaylistInfo.isValid && 
+                  <span className="text-xs text-amber-600 ml-2">(format may be invalid)</span>
+                }
               </div>
             </div>
           )}
-          
-          {/* Coin estimate for URL */}
+            {/* Enhanced playlist info display */}
           {url && (
-            <div className="mt-2 p-3 bg-amber-50/70 border border-amber-100 rounded-md flex items-center gap-2">
+            <div className="mt-2 p-3 bg-amber-50/70 border border-amber-100 rounded-md">
               {isLoadingPlaylistInfo ? (
-                <>
+                <div className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 text-amber-600 shrink-0 animate-spin" />
                   <div className="text-sm text-amber-800">
                     <span className="font-medium">Loading accurate playlist information...</span>
                   </div>
-                </>
+                </div>
               ) : (
-                <>
-                  <Coins className="h-4 w-4 text-amber-600 shrink-0" />
-                  <div className="text-sm text-amber-800">
-                    <span className="font-medium">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    {isPlaylist ? (
+                      <Coins className="h-4 w-4 text-amber-600 shrink-0" />
+                    ) : (
+                      <Info className="h-4 w-4 text-amber-600 shrink-0" />
+                    )}
+                    <div className="text-sm text-amber-800 font-medium">
                       {isPlaylist ? (
                         playlistInfo?.title ? (
                           <>
-                            Playlist: <span className="font-semibold">{playlistInfo.title}</span> {" "}
-                            {playlistInfo?.isEstimate ? 
-                              `(~${videoCount} videos est.)` : 
-                              `(${videoCount} videos)`}
+                            Playlist: <span className="font-semibold">{playlistInfo.title}</span>
                           </>
                         ) : (
-                          `Playlist detected - ${videoCount} videos${isPlaylist ? " est." : ""}`
+                          "Playlist detected"
                         )
                       ) : (
                         "Single video detected"
                       )}
-                    </span>
+                    </div>
                   </div>
-                </>
+                    {/* Video count information with accuracy indicator */}
+                  {isPlaylist && (
+                    <div className="flex items-center pl-6">
+                      <div className="text-sm text-amber-700">
+                        <span>
+                          {playlistInfo?.isEstimate ? 
+                            `~${videoCount} videos estimated` : 
+                            `${videoCount} videos`}
+                        </span>
+                        {playlistInfo?.isEstimate && (
+                          <span className="text-xs italic px-2 py-0.5 bg-amber-100 rounded ml-2">Estimate</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Error state display if there was an issue */}
+                  {playlistInfo && 'error' in playlistInfo && (
+                    <div className="pl-6 text-xs text-red-600">
+                      Using estimated count due to error
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}

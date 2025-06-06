@@ -8,6 +8,23 @@ export const dynamic = 'force-dynamic';
 
 const execPromise = promisify(exec);
 
+// Cache for playlist info to avoid repeated API calls
+const playlistCache = new Map<string, { 
+  data: PlaylistInfo; 
+  timestamp: number; 
+  ttl: number; 
+}>();
+
+interface PlaylistInfo {
+  title: string;
+  videoCount: number;
+  isEstimate: boolean;
+}
+
+// Cache TTL: 10 minutes for accurate data, 30 minutes for estimates
+const CACHE_TTL_ACCURATE = 10 * 60 * 1000; // 10 minutes
+const CACHE_TTL_ESTIMATE = 30 * 60 * 1000; // 30 minutes
+
 /**
  * Endpoint to get YouTube playlist information quickly and efficiently
  */
@@ -23,22 +40,25 @@ export async function GET(request: Request) {
       );
     }
 
-    // Format the YouTube playlist URL
-    const youtubePlaylistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
+    // Check cache first
+    const cached = getFromCache(playlistId);
+    if (cached) {
+      console.log(`Cache hit for playlist ${playlistId}`);
+      return NextResponse.json(cached);
+    }
+
+    // Try multiple methods in order of speed and accuracy
+    const playlistInfo = await getPlaylistInfoFast(playlistId);
     
-    // Get playlist information using the fast method
-    const playlistInfo = await getPlaylistInfoFast(youtubePlaylistUrl);
+    // Cache the result
+    const ttl = playlistInfo.isEstimate ? CACHE_TTL_ESTIMATE : CACHE_TTL_ACCURATE;
+    setCache(playlistId, playlistInfo, ttl);
     
-    return NextResponse.json({
-      title: playlistInfo.title,
-      videoCount: playlistInfo.videoCount,
-      isEstimate: playlistInfo.isEstimate
-    });
-    
+    return NextResponse.json(playlistInfo);
   } catch (error) {
     console.error('Error getting playlist info:', error);
     // Return a reasonable estimate based on the playlistId format
-    const estimatedCount = getPlaylistEstimate(request.url);
+    const estimatedCount = getPlaylistEstimate(playlistId || '');
     
     return NextResponse.json(
       { 
@@ -53,211 +73,247 @@ export async function GET(request: Request) {
 }
 
 /**
- * Fast method to get playlist info using Puppeteer
- * This method avoids scrolling and just extracts the count from the page header
+ * Fast method to get playlist info using multiple approaches
  */
-async function getPlaylistInfoFast(playlistUrl: string): Promise<{
-  title: string;
-  videoCount: number;
-  isEstimate: boolean;
-}> {
-  // Use a strict timeout for the entire operation
-  const TIMEOUT = 8000; // 8 seconds max
-  
-  // Launch the browser with minimal settings for speed
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-accelerated-2d-canvas',
-      '--no-first-run',
-      '--no-zygote',
-      '--disable-gpu',
-      '--disable-extensions',
-    ],
-    defaultViewport: { width: 800, height: 600 }
-  });
-  
-  let timeoutId: NodeJS.Timeout;
-  
+async function getPlaylistInfoFast(playlistId: string): Promise<PlaylistInfo> {
+  // Method 1: Try YouTube Data API v3 (fastest and most accurate)
+  if (process.env.YOUTUBE_API_KEY) {
+    try {
+      console.log(`Trying YouTube Data API for playlist ${playlistId}`);
+      const result = await getPlaylistInfoFromAPI(playlistId);
+      if (result) {
+        console.log(`✓ YouTube API success: ${result.videoCount} videos`);
+        return result;
+      }
+    } catch (error) {
+      console.log(`YouTube API failed: ${error}`);
+    }
+  }
+
+  // Method 2: Try yt-dlp (fast and reliable)
   try {
-    // Create a promise that rejects after timeout
-    const timeoutPromise = new Promise<never>((_resolve, reject) => {
-      timeoutId = setTimeout(() => {
-        reject(new Error(`Operation timed out after ${TIMEOUT}ms`));
-      }, TIMEOUT);
+    console.log(`Trying yt-dlp for playlist ${playlistId}`);
+    const result = await getPlaylistInfoFromYtDlp(playlistId);
+    if (result && result.videoCount > 0) {
+      console.log(`✓ yt-dlp success: ${result.videoCount} videos`);
+      return result;
+    }
+  } catch (error) {
+    console.log(`yt-dlp failed: ${error}`);
+  }
+
+  // Method 3: Try web scraping without browser (lighter weight)
+  try {
+    console.log(`Trying web scraping for playlist ${playlistId}`);
+    const result = await getPlaylistInfoFromWeb(playlistId);
+    if (result && result.videoCount > 0) {
+      console.log(`✓ Web scraping success: ${result.videoCount} videos`);
+      return result;
+    }
+  } catch (error) {
+    console.log(`Web scraping failed: ${error}`);
+  }
+
+  // Method 4: Fallback to intelligent estimate
+  console.log(`All methods failed, using estimate for playlist ${playlistId}`);
+  return {
+    title: 'YouTube Playlist',
+    videoCount: getPlaylistEstimate(playlistId),
+    isEstimate: true
+  };
+}
+
+/**
+ * Get playlist info using YouTube Data API v3
+ */
+async function getPlaylistInfoFromAPI(playlistId: string): Promise<PlaylistInfo | null> {
+  try {
+    const apiKey = process.env.YOUTUBE_API_KEY;
+    if (!apiKey) return null;
+
+    // Get playlist details
+    const playlistUrl = `https://www.googleapis.com/youtube/v3/playlists?part=snippet&id=${playlistId}&key=${apiKey}`;
+    const itemsUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=contentDetails&maxResults=0&playlistId=${playlistId}&key=${apiKey}`;
+    
+    // Make parallel requests
+    const [playlistResponse, itemsResponse] = await Promise.all([
+      axios.get(playlistUrl, { timeout: 5000 }),
+      axios.get(itemsUrl, { timeout: 5000 })
+    ]);
+
+    const playlistData = playlistResponse.data;
+    const itemsData = itemsResponse.data;
+
+    if (!playlistData.items || playlistData.items.length === 0) {
+      return null;
+    }
+
+    const title = playlistData.items[0].snippet.title;
+    const videoCount = itemsData.pageInfo?.totalResults || 0;
+    
+    return {
+      title,
+      videoCount,
+      isEstimate: false
+    };
+  } catch (error) {
+    console.error('Error in YouTube API method:', error);
+    return null;
+  }
+}
+
+/**
+ * Get playlist info using yt-dlp command-line tool
+ */
+async function getPlaylistInfoFromYtDlp(playlistId: string): Promise<PlaylistInfo | null> {
+  try {
+    // Format URL
+    const url = `https://www.youtube.com/playlist?list=${playlistId}`;
+    
+    // Get playlist info using yt-dlp
+    const { stdout } = await execPromise(
+      `yt-dlp --flat-playlist --dump-single-json "${url}"`,
+      { timeout: 8000 }
+    );
+    
+    const data = JSON.parse(stdout);
+    
+    if (!data || !data.title) {
+      return null;
+    }
+    
+    return {
+      title: data.title,
+      videoCount: data.entries?.length || data.playlist_count || 0,
+      isEstimate: false
+    };
+  } catch (error) {
+    console.error('Error in yt-dlp method:', error);
+    return null;
+  }
+}
+
+/**
+ * Get playlist info using lightweight web scraping
+ */
+async function getPlaylistInfoFromWeb(playlistId: string): Promise<PlaylistInfo | null> {
+  try {
+    const url = `https://www.youtube.com/playlist?list=${playlistId}`;
+    
+    // Fetch the playlist page
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      },
+      timeout: 5000
     });
     
-    // Create the actual scraping promise
-    const scrapingPromise = (async () => {
-      const page = await browser.newPage();
-      
-      // Block images, fonts, and CSS to speed up loading
-      await page.setRequestInterception(true);
-      page.on('request', (request) => {
-        if (['image', 'stylesheet', 'font'].includes(request.resourceType())) {
-          request.abort();
-        } else {
-          request.continue();
-        }
-      });
-      
-      // Set a realistic user agent
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36');
-      
-      // Navigate to the YouTube playlist with minimal waiting
-      await page.goto(playlistUrl, { waitUntil: 'domcontentloaded', timeout: TIMEOUT - 1000 });
-      
-      // First try: Extract video count from page title or metadata without waiting for full load
-      let videoCount = 0;
-      let isEstimate = false;
-      let title = 'YouTube Playlist';
-      
-      // Get the page title
-      title = await page.title();
-      title = title.replace(' - YouTube', '').trim();
-      
-      // METHOD 1: Extract from initial HTML response (fastest method)
-      // YouTube often includes the video count in the initial HTML response
-      const initialHtml = await page.content();
-      
-      // Try to find the playlist info in multiple formats
-      
-      // Format 1: Look for JSON data in the page that contains videoCount
-      const jsonScriptMatch = initialHtml.match(/("playlistId":"[^"]+","title":"[^"]+"[^}]+"videoCount":)(\d+)/i);
-      if (jsonScriptMatch && jsonScriptMatch[2]) {
-        videoCount = parseInt(jsonScriptMatch[2], 10);
-        console.log(`Found video count in JSON data: ${videoCount}`);
-        
-        // We found the count in the page data - it's accurate
-        await browser.close();
-        return {
-          title,
-          videoCount,
-          isEstimate: false
-        };
-      }
-      
-      // Format 2: Try to extract from the page text
-      // Wait a very short time for the stats to load, but with a strict timeout
-      await Promise.race([
-        page.waitForSelector('[class*="stats"], [class*="metadata-stats"], #stats', { timeout: 3000 }),
-        new Promise(r => setTimeout(r, 3000))
-      ]).catch(() => {});
-      
-      // Look for text containing "X videos" in multiple places
-      const statsText = await page.evaluate(() => {
-        // Try different selectors where YouTube might show video count
-        const selectors = [
-          '[class*="stats"]',
-          '[class*="metadata-stats"]',
-          '#stats',
-          'yt-formatted-string:contains("video")',
-          '.metadata-line',
-          '.style-scope ytd-playlist-header-renderer'
-        ];
-        
-        for (const selector of selectors) {
-          const elements = document.querySelectorAll(selector);
-          for (const element of elements) {
-            const text = element.textContent || '';
-            if (text.includes('video')) {
-              return text;
-            }
-          }
-        }
-        return '';
-      });
-      
-      // Extract the video count from the stats text
-      if (statsText) {
-        const match = statsText.match(/(\d+)\s*videos?/i);
-        if (match && match[1]) {
-          videoCount = parseInt(match[1], 10);
-          console.log(`Found video count in page text: ${videoCount}`);
-        }
-      }
-      
-      // If we found a count, return it as accurate
-      if (videoCount > 0) {
-        await browser.close();
-        return {
-          title,
-          videoCount,
-          isEstimate: false
-        };
-      }
-      
-      // METHOD 3: Count visible videos only (without scrolling)
-      // This will give us a lower bound, but it's better than nothing
-      const visibleVideoCount = await page.evaluate(() => {
-        return document.querySelectorAll('ytd-playlist-video-renderer').length;
-      });
-      
-      if (visibleVideoCount > 0) {
-        // We'll estimate there's about 4x as many videos as initially visible
-        // This is a rough estimate and might not be accurate
-        videoCount = visibleVideoCount * 4;
-        isEstimate = true;
-        console.log(`Estimated ${videoCount} videos based on ${visibleVideoCount} visible`);
-      }
-      
-      // If we still don't have a count, make an intelligent estimate based on the playlist ID
-      if (videoCount === 0) {
-        // Get a more reasonable estimate based on the URL pattern
-        const url = new URL(playlistUrl);
-        const playlistId = url.searchParams.get('list') || '';
-        videoCount = getPlaylistEstimate(playlistId);
-        isEstimate = true;
-      }
-      
-      await browser.close();
+    const html = response.data;
+    
+    // Extract title
+    const titleMatch = html.match(/<title>(.+?)<\/title>/);
+    const title = titleMatch ? titleMatch[1].replace(' - YouTube', '') : 'YouTube Playlist';
+    
+    // Extract video count using multiple patterns
+    const countMatches = [
+      // Pattern 1: "123 videos"
+      html.match(/(\d+)\s+video/i),
+      // Pattern 2: "Updated last on Apr 1, 2023 • 123 videos"
+      html.match(/•\s*(\d+)\s+video/i),
+      // Pattern 3: In header stats
+      html.match(/headerSubtext.*?(\d+)\s+video/i),
+      // Pattern 4: In metadata
+      html.match(/videosCountText.*?(\d+)\s+video/i)
+    ];
+    
+    // Find the first successful match
+    const countMatch = countMatches.find(match => match && match[1]);
+    
+    if (countMatch && countMatch[1]) {
+      const count = parseInt(countMatch[1], 10);
       return {
         title,
-        videoCount,
-        isEstimate
+        videoCount: count,
+        isEstimate: false
       };
-    })();
+    }
     
-    // Race between the scraping operation and the timeout
-    const result = await Promise.race([scrapingPromise, timeoutPromise]);
-    clearTimeout(timeoutId!);
-    return result as { title: string; videoCount: number; isEstimate: boolean };
+    // Count video items in the page as a last resort
+    const videoItemCount = (html.match(/"videoId":"/g) || []).length;
     
+    if (videoItemCount > 0) {
+      return {
+        title,
+        videoCount: videoItemCount,
+        isEstimate: true // This is likely an undercount
+      };
+    }
+    
+    return null;
   } catch (error) {
-    // Make sure to clear the timeout if it exists
-    if (timeoutId) clearTimeout(timeoutId);
-    
-    // Close the browser if it's still open
-    try {
-      await browser.close();
-    } catch (e) {
-      // Ignore browser close errors
+    console.error('Error in web scraping method:', error);
+    return null;
+  }
+}
+
+/**
+ * Get from cache if valid
+ */
+function getFromCache(playlistId: string): PlaylistInfo | null {
+  const cached = playlistCache.get(playlistId);
+  
+  if (cached) {
+    const now = Date.now();
+    if (now - cached.timestamp < cached.ttl) {
+      return cached.data;
     }
     
-    // Extract the URL from the error for the fallback estimation
-    let urlString = '';
-    if (error instanceof Error && error.message.includes('http')) {
-      const matches = error.message.match(/(https?:\/\/[^\s]+)/);
-      if (matches) urlString = matches[0];
+    // Remove expired cache
+    playlistCache.delete(playlistId);
+  }
+  
+  return null;
+}
+
+/**
+ * Set cache with TTL
+ */
+function setCache(playlistId: string, data: PlaylistInfo, ttl: number): void {
+  // Clean up expired cache items periodically
+  if (playlistCache.size > 50) {
+    cleanupCache();
+  }
+  
+  // Set new cache
+  playlistCache.set(playlistId, {
+    data,
+    timestamp: Date.now(),
+    ttl
+  });
+}
+
+/**
+ * Clean up expired cache entries
+ */
+function cleanupCache(): void {
+  const now = Date.now();
+  
+  // Use entries() to get iterator
+  const entries = playlistCache.entries();
+  
+  // Convert iterator to array to avoid modification during iteration
+  const entriesArray = Array.from(entries);
+  
+  for (const [key, value] of entriesArray) {
+    if (now - value.timestamp > value.ttl) {
+      playlistCache.delete(key);
     }
-    
-    console.error('Error in fast playlist info retrieval:', error);
-    
-    // Return a reasonable estimate
-    return {
-      title: 'YouTube Playlist',
-      videoCount: getPlaylistEstimate(playlistUrl),
-      isEstimate: true
-    };
   }
 }
 
 /**
  * Get a reasonable estimate for playlist size based on the URL pattern
- * This is used as a fallback when scraping fails
+ * This is used as a fallback when all other methods fail
  */
 function getPlaylistEstimate(urlOrId: string): number {
   // Extract playlist ID from URL if needed
