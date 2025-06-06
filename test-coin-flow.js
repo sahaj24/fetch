@@ -14,7 +14,7 @@ async function testCoinDeductionFlow() {
   console.log('📤 Making request to extract API (no auth - should create anonymous user)...');
   
   try {
-    const response = await fetch('http://localhost:3002/api/youtube/extract', {
+    const response = await fetch('http://localhost:3000/api/youtube/extract', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -52,7 +52,7 @@ async function testCoinDeductionFlow() {
     
     console.log('📤 Making request with fake auth token (should fail auth but show flow)...');
     
-    const response2 = await fetch('http://localhost:3002/api/youtube/extract', {
+    const response2 = await fetch('http://localhost:3000/api/youtube/extract', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
