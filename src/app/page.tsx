@@ -297,9 +297,20 @@ export default function Home() {
       });
   
       // Clear progress interval
-      clearInterval(progressInterval);      if (!response.ok) {
+      clearInterval(progressInterval);
+  
+      if (!response.ok) {
         const errorData = await response.json();
         // console.error("[ERROR] Extract API error:", errorData);
+          // Check if this is an insufficient funds error
+        if (errorData.requireMoreCoins) {
+          toast.error("Insufficient Coins: You don't have enough coins for this operation. Please add more coins to your account.", {
+            duration: 5000
+          });
+          setActiveTab("input");
+          return;
+        }
+        
         throw new Error(errorData.error || "Failed to extract subtitles");
       }
   

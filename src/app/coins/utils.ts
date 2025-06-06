@@ -798,10 +798,16 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
     console.error("🚨 CRITICAL: Cannot get coins: No user ID provided");
     return null;
   }
-    try {
+  
+  try {
     console.log(`🔍 DEBUG: Getting coins for user ${userId}`);
     
-    // Try to get from database directly - the table exists in production
+    // Check if the table exists first
+    await ensureUserCoinsTable();
+    
+    // Try to get from database
+    // Note: PostgreSQL treats quoted identifiers as case-sensitive
+    // Try with different case variations of the table name
     console.log(`💾 DEBUG: Querying table with user_id=${userId}`);
     
     // Try 'user_coins' (snake_case - most common convention in PostgreSQL)
@@ -855,10 +861,16 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
         console.log("📦 Using cached coin data due to Supabase error");
         return cachedCoins;
       }
-        // If no coins found, return null - don't automatically create coins
+      
+      // If no coins found, create them
       if (error.code === "PGRST116") { // No rows returned
-        console.log("🆕 No coins found for user, returning null instead of auto-creating");
-        return null;
+        console.log("🆕 No coins found for user, creating new coins document");
+        try {
+          return await getOrCreateUserCoinsDocument(userId);
+        } catch (err) {
+          console.error("❌ Firestore error getting user coins:", err);
+          return getDefaultUserCoins();
+        }
       }
       
       // For any other error, return default coins

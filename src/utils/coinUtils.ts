@@ -6,7 +6,6 @@ export type OperationType = 'EXTRACT_SUBTITLES' | 'BATCH_EXTRACT' | 'DOWNLOAD' |
 /**
  * Initializes a user's coins account with 50 coins if they don't have one yet
  * Returns the user's coin balance 
- * Uses the secure add_user_coins RPC function that bypasses RLS policies
  */
 export async function initializeUserCoins(userId: string): Promise<number | null> {
   try {
@@ -32,22 +31,43 @@ export async function initializeUserCoins(userId: string): Promise<number | null
       }
     }
 
-    // If there's no record, create one with 50 coins using the secure RPC function
+    // If there's no record, create one with 50 coins
     if (!existingCoins) {
       console.log('Creating new user coins record with 50 coins welcome bonus');
       
-      const transactionId = `welcome_${Date.now()}`;
-      const { error } = await supabase.rpc('add_user_coins', {
-        p_user_id: userId,
-        p_amount: 50,
-        p_transaction_id: transactionId,
-        p_description: 'Welcome bonus',
-        p_created_at: new Date().toISOString()
-      });
+      // Direct insert to create the user_coins record
+      const { error } = await supabase
+        .from('user_coins')
+        .insert({
+          user_id: userId,
+          balance: 50,
+          total_earned: 50,
+          total_spent: 0,
+          subscription_tier: 'FREE',
+          last_coin_refresh: new Date().toISOString()
+        });
       
       if (error) {
         console.error('Error creating user coins record:', error);
         return null;
+      }
+      
+      // Also record the transaction
+      const transactionId = `welcome_${Date.now()}`;
+      const { error: transError } = await supabase
+        .from('coin_transactions')
+        .insert({
+          user_id: userId,
+          transaction_id: transactionId,
+          type: 'EARNED',
+          amount: 50,
+          description: 'Welcome bonus',
+          created_at: new Date().toISOString()
+        });
+        
+      if (transError) {
+        console.error('Error recording welcome transaction:', transError);
+        // Continue anyway since the coins were added
       }
       
       console.log('Successfully created user coins with welcome bonus');
@@ -98,137 +118,202 @@ export async function getUserCoinsBalance(userId: string | undefined): Promise<n
 }
 
 /**
- * Enhanced coin deduction result with detailed error information
- */
-export interface CoinDeductionResult {
-  success: boolean;
-  error?: string;
-  errorType?: 'INSUFFICIENT_COINS' | 'SYSTEM_ERROR' | 'AUTH_ERROR' | 'DATABASE_ERROR';
-  currentBalance?: number;
-  requiredAmount?: number;
-  newBalance?: number;
-}
-
-/**
  * Deducts coins from a user's balance when they perform an operation
- * Returns detailed result with error information for better debugging
+ * Returns true if successful, false if the user doesn't have enough coins or if there's an error
  * 
- * Uses the secure spend_user_coins RPC function that bypasses RLS policies
+ * IMPORTANT: This function handles deduction for ALL subscription tiers including Pro users
  */
-export async function deductCoinsForOperation(userId: string, operationType: OperationType, coinsToDeduct: number): Promise<CoinDeductionResult> {
+export async function deductCoinsForOperation(userId: string, operationType: OperationType, coinsToDeduct: number): Promise<boolean> {
   try {
     if (!userId) {
       console.error('❌ Cannot deduct coins: No user ID provided');
-      return {
-        success: false,
-        error: 'No user ID provided',
-        errorType: 'AUTH_ERROR'
-      };
+      return false;
     }
     
-    console.log(`🔥 [COIN DEDUCTION] Starting deduction - userId=${userId}, operation=${operationType}, amount=${coinsToDeduct}`);
+    console.log(`✅ deductCoinsForOperation called with userId=${userId}, operationType=${operationType}, coinsToDeduct=${coinsToDeduct}`);
 
-    // 1. Get user's current balance using maybeSingle to avoid RLS errors
-    const { data: currentData, error: fetchError } = await supabase
+    // Define the user data type for clarity
+    type UserCoinData = {
+      balance: number;
+      total_spent: number;
+      subscription_tier: string;
+    };
+
+    // 1. FIRST: Get the current user data directly from the database
+    const { data, error } = await supabase
       .from('user_coins')
-      .select('balance, subscription_tier')
+      .select('balance, total_spent, subscription_tier')
       .eq('user_id', userId)
-      .maybeSingle();
+      .single();
       
-    if (fetchError) {
-      console.error('❌ [COIN DEDUCTION] Error fetching user coins data:', fetchError);
-      return {
-        success: false,
-        error: `Database error: ${fetchError.message}`,
-        errorType: 'DATABASE_ERROR'
-      };
+    if (error) {
+      console.error('❌ Error fetching user coins data:', error);
+      return false;
     }
     
-    if (!currentData) {
-      console.error('❌ [COIN DEDUCTION] User coins record not found. This should not happen for existing users.');
-      console.error('❌ [COIN DEDUCTION] The user might not be properly initialized or there is an ID mismatch.');
-      return {
-        success: false,
-        error: 'User account not found. Please contact support.',
-        errorType: 'DATABASE_ERROR'
-      };
-    }
-
-    const currentBalance = currentData.balance || 0;
-    const subscriptionTier = currentData.subscription_tier || 'FREE';
-    
-    console.log(`📊 [COIN DEDUCTION] EXISTING USER FOUND - userId=${userId}, tier=${subscriptionTier}, balance=${currentBalance}`);
-    
-    // Check if user has enough coins
-    if (currentBalance < coinsToDeduct) {
-      console.error(`❌ [COIN DEDUCTION] User ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
-      return {
-        success: false,
-        error: `Insufficient coins. Required: ${coinsToDeduct}, Available: ${currentBalance}`,
-        errorType: 'INSUFFICIENT_COINS',
-        currentBalance,
-        requiredAmount: coinsToDeduct
-      };
-    }
-
-    const expectedNewBalance = currentBalance - coinsToDeduct;
-
-    console.log(`💰 [COIN DEDUCTION] PROCEEDING WITH DEDUCTION: ${coinsToDeduct} coins for user ${userId}: ${currentBalance} -> ${expectedNewBalance}`);
-    
-    // 2. Use the secure spend_user_coins RPC function that bypasses RLS
-    const transactionId = `${operationType.toLowerCase()}_${Date.now()}`;
-    const { error: spendError } = await supabase.rpc('spend_user_coins', {
-      p_user_id: userId,
-      p_amount: coinsToDeduct,
-      p_transaction_id: transactionId,
-      p_description: `${operationType} operation`,
-      p_created_at: new Date().toISOString()
-    });
+    if (!data) {
+      console.error('❌ User coins record not found for user_id:', userId);
+      
+      // Try to create a new record for the user
+      console.log('✅ Creating new coin record for user');
+      const { error: insertError } = await supabase
+        .from('user_coins')
+        .insert({
+          user_id: userId,
+          balance: 50, // Give them 50 starter coins
+          total_earned: 50,
+          total_spent: 0,
+          subscription_tier: 'FREE'
+        });
         
-    if (spendError) {
-      console.error('❌ [COIN DEDUCTION] Error spending user coins:', spendError);
-      return {
-        success: false,
-        error: `Failed to spend coins: ${spendError.message}`,
-        errorType: 'DATABASE_ERROR'
-      };
+      if (insertError) {
+        console.error('❌ Failed to create user coins record:', insertError);
+        return false;
+      }
+      
+      // Fetch the newly created record
+      const { data: newUserData, error: newFetchError } = await supabase
+        .from('user_coins')
+        .select('balance, total_spent, subscription_tier')
+        .eq('user_id', userId)
+        .single();
+        
+      if (newFetchError || !newUserData) {
+        console.error('❌ Still cannot find user coins record after creation attempt');
+        return false;
+      }
+      
+      // Use the new user data for coin operations
+      console.log('✅ New user record created successfully:', newUserData);
+      
+      // Get values from the new record
+      const currentBalance = newUserData.balance || 0;
+      const totalSpent = newUserData.total_spent || 0;
+      const subscriptionTier = (newUserData.subscription_tier || 'FREE').toUpperCase();
+      
+      // Check if new user has enough coins
+      if (currentBalance < coinsToDeduct) {
+        console.error(`❌ New user ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
+        return false;
+      }
+      
+      // Calculate new values
+      const newBalance = currentBalance - coinsToDeduct;
+      const newTotalSpent = totalSpent + coinsToDeduct;
+      
+      // Update the database with the new values
+      const { error: updateError } = await supabase
+        .from('user_coins')
+        .update({
+          balance: newBalance,
+          total_spent: newTotalSpent,
+          subscription_tier: subscriptionTier
+        })
+        .eq('user_id', userId);
+        
+      if (updateError) {
+        console.error('❌ Error updating new user coins:', updateError);
+        return false;
+      }
+      
+      // Record the transaction
+      await recordCoinTransaction(userId, operationType, -coinsToDeduct);
+      
+      console.log(`✅ Successfully deducted ${coinsToDeduct} coins from new user ${userId}. New balance: ${newBalance}`);
+      return true;
     }
     
-    console.log(`✅ [COIN DEDUCTION] SUCCESS! Coin deduction completed for user ${userId}`);
+    // Process existing user
+    const userCoinData = data as UserCoinData;
+    console.log('✅ User data retrieved:', userCoinData);
 
-    // 3. Verify the update worked
+    const currentBalance = userCoinData.balance || 0;
+    const totalSpent = userCoinData.total_spent || 0;
+    const subscriptionTier = userCoinData.subscription_tier || 'FREE';
+    
+    console.log(`📊 User ${userId} has subscription tier: ${subscriptionTier}, balance: ${currentBalance}`);
+    
+    // CRITICAL FIX: Force uppercase for subscription tier to ensure consistent comparison
+    const normalizedTier = subscriptionTier.toUpperCase();
+    
+    // Always check if the user has enough coins, regardless of subscription tier
+    if (currentBalance < coinsToDeduct) {
+      console.error(`❌ User ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
+      return false;
+    }
+
+    const newBalance = currentBalance - coinsToDeduct;
+    const newTotalSpent = totalSpent + coinsToDeduct;
+
+    console.log(`💰 Updating user ${userId} coins: balance ${currentBalance} -> ${newBalance}, total_spent ${totalSpent} -> ${newTotalSpent}`);
+    
+    // 2. DIRECT DATABASE UPDATE
+    const { error: updateError } = await supabase
+      .from('user_coins')
+      .update({
+        balance: newBalance,
+        total_spent: newTotalSpent,
+        subscription_tier: normalizedTier
+      })
+      .eq('user_id', userId);
+        
+    if (updateError) {
+      console.error('❌ Error updating user coins:', updateError);
+      return false;
+    }
+    
+    console.log(`✅ Database update successful for user ${userId}`);
+
+    // 3. RECORD THE TRANSACTION
+    await recordCoinTransaction(userId, operationType, -coinsToDeduct);
+
+    // 4. VERIFY THE UPDATE WORKED
     const { data: verifyData } = await supabase
       .from('user_coins')
       .select('balance')
       .eq('user_id', userId)
-      .maybeSingle();
+      .single();
       
     if (verifyData) {
-      console.log(`✅ [COIN DEDUCTION] Verified new balance: ${verifyData.balance} (expected: ${expectedNewBalance})`);
+      console.log(`✅ Verified new balance: ${verifyData.balance}`);
     }
 
-    console.log(`🎉 [COIN DEDUCTION] FINAL RESULT: Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${expectedNewBalance}`);
-    return {
-      success: true,
-      currentBalance: expectedNewBalance,
-      newBalance: expectedNewBalance
-    };
+    console.log(`✅ Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${newBalance}`);
+    return true;
   } catch (error) {
-    console.error('❌ [COIN DEDUCTION] CRITICAL ERROR in deductCoinsForOperation:', error);
-    console.error('❌ [COIN DEDUCTION] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-    console.error('❌ [COIN DEDUCTION] Error details - userId:', userId, 'operationType:', operationType, 'coinsToDeduct:', coinsToDeduct);
-    return {
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      errorType: 'SYSTEM_ERROR'
-    };
+    console.error('❌ Unexpected error in deductCoinsForOperation:', error);
+    return false;
   }
+}
+
+// Helper function to record coin transactions
+async function recordCoinTransaction(userId: string, operationType: OperationType, amount: number): Promise<boolean> {
+  const transactionId = `${operationType.toLowerCase()}_${Date.now()}`;
+  const transactionType = amount < 0 ? 'SPENT' : 'EARNED';
+  
+  const { error } = await supabase
+    .from('coin_transactions')
+    .insert({
+      user_id: userId,
+      transaction_id: transactionId,
+      type: transactionType,
+      amount: amount,
+      description: `${operationType} operation`,
+      created_at: new Date().toISOString()
+    });
+    
+  if (error) {
+    console.error('❌ Error recording transaction:', error);
+    return false;
+  }
+  
+  console.log(`✅ Recorded transaction ${transactionId}`);
+  return true;
 }
 
 /**
  * Updates a user's coin balance when they purchase a subscription
  * Adds the subscription coins to their balance and updates their subscription tier
- * Uses the secure add_user_coins RPC function that bypasses RLS policies
  */
 export async function addSubscriptionCoins(userId: string, planName: string, coinsToAdd: number): Promise<boolean> {
   try {
@@ -239,39 +324,66 @@ export async function addSubscriptionCoins(userId: string, planName: string, coi
 
     console.log(`Adding ${coinsToAdd} coins for user ${userId} from ${planName} subscription`);
 
-    // IMPORTANT: Normalize the subscription tier name to uppercase for consistency
-    const normalizedTierName = planName.toUpperCase();
+    // First get the current balance
+    const { data: userData, error: fetchError } = await supabase
+      .from('user_coins')
+      .select('balance, total_earned')
+      .eq('user_id', userId)
+      .single();
     
-    // Use the secure add_user_coins RPC function
-    const transactionId = `subscription_${Date.now()}`;
-    const { error } = await supabase.rpc('add_user_coins', {
-      p_user_id: userId,
-      p_amount: coinsToAdd,
-      p_transaction_id: transactionId,
-      p_description: `${planName} subscription coins`,
-      p_created_at: new Date().toISOString()
-    });
-    
-    if (error) {
-      console.error('Error adding subscription coins:', error);
+    if (fetchError) {
+      console.error('Error fetching user coins data:', fetchError);
       return false;
     }
 
-    // Update subscription tier separately (the RPC function doesn't handle this)
-    const { error: tierError } = await supabase
+    if (!userData) {
+      console.error('User coins record not found');
+      return false;
+    }
+
+    const currentBalance = userData.balance || 0;
+    const totalEarned = userData.total_earned || 0;
+    const newBalance = currentBalance + coinsToAdd;
+    const newTotalEarned = totalEarned + coinsToAdd;
+
+    // IMPORTANT: Normalize the subscription tier name to uppercase for consistency
+    const normalizedTierName = planName.toUpperCase();
+    
+    // Update the user's coin balance and subscription tier
+    const { error: updateError } = await supabase
       .from('user_coins')
       .update({
+        balance: newBalance,
+        total_earned: newTotalEarned,
         subscription_tier: normalizedTierName,
         last_coin_refresh: new Date().toISOString()
       })
       .eq('user_id', userId);
     
-    if (tierError) {
-      console.error('Error updating subscription tier:', tierError);
+    if (updateError) {
+      console.error('Error updating user coins balance:', updateError);
+      return false;
+    }
+
+    // Record the transaction
+    const transactionId = `subscription_${Date.now()}`;
+    const { error: transError } = await supabase
+      .from('coin_transactions')
+      .insert({
+        user_id: userId,
+        transaction_id: transactionId,
+        type: 'SUBSCRIPTION',
+        amount: coinsToAdd,
+        description: `${planName} subscription coins`,
+        created_at: new Date().toISOString()
+      });
+      
+    if (transError) {
+      console.error('Error recording subscription transaction:', transError);
       // Continue anyway since the coins were added
     }
 
-    console.log(`Successfully added ${coinsToAdd} coins to user ${userId} for ${planName} subscription`);
+    console.log(`Successfully added ${coinsToAdd} coins to user ${userId}. New balance: ${newBalance}`);
     return true;
   } catch (error) {
     console.error('Error in addSubscriptionCoins:', error);

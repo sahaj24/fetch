@@ -20,7 +20,7 @@ import {
 } from "./utils";
 import { OPERATION_COSTS } from "@/app/coins/utils";
 import { supabase } from "@/supabase/config";
-import { deductCoinsForOperation, CoinDeductionResult } from "@/utils/coinUtils";
+import { deductCoinsForOperation } from "@/utils/coinUtils";
 
 // Create a simple in-memory cache for transcripts to avoid redundant fetching
 type TranscriptCache = {
@@ -995,61 +995,56 @@ export async function POST(req: NextRequest) {
           
           // Get coin cost from the payload if available, otherwise calculate it
           let cost = 0;
-            // Use the provided estimate if available instead of recalculating
+          
+          // Use the provided estimate if available instead of recalculating
           if (body.coinCostEstimate && typeof body.coinCostEstimate === 'number') {
             cost = body.coinCostEstimate;
             console.log(`Using provided cost estimate: ${cost} coins`);
           } else {
-            // Debug formats array
-            console.log(`[COST DEBUG] formats:`, formats);
-            console.log(`[COST DEBUG] formats.length:`, formats.length);
-            console.log(`[COST DEBUG] processingStats.processedVideos:`, processingStats.processedVideos);
-            console.log(`[COST DEBUG] OPERATION_COSTS.SINGLE_SUBTITLE:`, OPERATION_COSTS.SINGLE_SUBTITLE);
-            console.log(`[COST DEBUG] OPERATION_COSTS.BATCH_SUBTITLE:`, OPERATION_COSTS.BATCH_SUBTITLE);
-            
-            // Calculate cost based on type and count (FIXED: removed formats.length multiplication)
+            // Calculate cost based on type and count
             if (inputType === "url") {
               if (processingStats.processedVideos > 1) {
-                // Batch rate for playlists/channels - cost per video, not per format
-                cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE;
-                console.log(`[COST DEBUG] Batch cost calculation: ${processingStats.processedVideos} * ${OPERATION_COSTS.BATCH_SUBTITLE} = ${cost}`);
+                // Batch rate for playlists/channels - multiply by formats.length since each format is a separate subtitle
+                cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE * formats.length;
               } else {
-                // Single video rate - fixed cost regardless of formats
-                cost = OPERATION_COSTS.SINGLE_SUBTITLE;
-                console.log(`[COST DEBUG] Single video cost: ${OPERATION_COSTS.SINGLE_SUBTITLE}`);
+                // Single video rate - multiply by formats.length since each format is a separate subtitle
+                cost = OPERATION_COSTS.SINGLE_SUBTITLE * formats.length;
               }
             } else if (inputType === "file") {
-              // CSV files always use batch rate - cost per video, not per format
-              cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE;
-              console.log(`[COST DEBUG] CSV cost calculation: ${processingStats.processedVideos} * ${OPERATION_COSTS.BATCH_SUBTITLE} = ${cost}`);
+              // CSV files always use batch rate - multiply by formats.length since each format is a separate subtitle
+              cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE * formats.length;
             }
             
             // Ensure minimum cost is 1 coin
             cost = Math.max(cost, 1);
-            console.log(`[COST DEBUG] Final cost after minimum: ${cost} coins`);
+            console.log(`Cost = ${cost} coins`);
           }
-            // Check if this is an anonymous user with free coins
-          const isAnonymousUser = userId?.startsWith('anonymous-') || userId?.startsWith('test-anonymous-');
-            if (isAnonymousUser) {
-            console.log(`[COIN DEBUG] Anonymous user ${userId} - not deducting coins`);
+          
+          // Check if this is an anonymous user with free coins
+          const isAnonymousUser = userId?.startsWith('anonymous-');
+
+          if (isAnonymousUser) {
+            console.log(`Anonymous user ${userId} - not deducting coins`);
             // Continue processing without coin deduction for anonymous users
           } else {
-            // For authenticated users, attempt to deduct coins but continue processing regardless
-            console.log(`[COIN DEBUG] ⭐ STARTING COIN DEDUCTION: Attempting to deduct ${cost} coins for authenticated user ${userId}`);
-            console.log(`[COIN DEBUG] Input type: ${inputType}, Operation type will be: ${inputType === "url" ? "EXTRACT_SUBTITLES" : "BATCH_EXTRACT"}`);
+            // For authenticated users, use the deductCoinsForOperation utility
+            console.log(`Deducting ${cost} coins for authenticated user ${userId}`);
             // Use a valid OperationType from the defined type
             const operationType = inputType === "url" ? "EXTRACT_SUBTITLES" : "BATCH_EXTRACT";
-            const deductionResult = await deductCoinsForOperation(userId, operationType, cost);
-              if (!deductionResult.success) {
-              if (deductionResult.errorType === 'INSUFFICIENT_COINS') {
-                console.warn(`⚠️ User ${userId} has insufficient coins (${deductionResult.currentBalance}/${deductionResult.requiredAmount}) - continuing processing`);
-              } else {
-                console.warn(`⚠️ Failed to deduct ${cost} coins for user ${userId}: ${deductionResult.error} - continuing processing`);
-              }
-              // Continue processing regardless of coin deduction failure
-            } else {
-              console.log(`[COIN DEBUG] ✅ COIN DEDUCTION COMPLETED: Successfully deducted ${cost} coins from user ${userId}. New balance: ${deductionResult.newBalance}`);
+            const deductionSuccess = await deductCoinsForOperation(userId, operationType, cost);
+            
+            if (!deductionSuccess) {
+              console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
+              return NextResponse.json(
+                { 
+                  error: "Insufficient coins for this operation",
+                  requireMoreCoins: true
+                },
+                { status: 402 }
+              );
             }
+            
+            console.log(`✅ Successfully deducted ${cost} coins from user ${userId}`);
           }
         } catch (deductError) {
             console.error(`Error in coin handling for user ${userId}:`, deductError);
@@ -1090,42 +1085,36 @@ export async function POST(req: NextRequest) {
         // Round up to the nearest integer to avoid fractional video counts
         processingStats.processedVideos = Math.ceil(validSubtitles.filter(s => !s.error && !s.isGenerated).length / formats.length || 0);
         processingStats.errorCount = validSubtitles.filter(s => s.error).length || 0;
-          // Deduct coins for successfully processed videos
+        
+        // Deduct coins for successfully processed videos
         if (userId && processingStats.processedVideos > 0) {
-          try {            console.log(`Attempting coin deduction for CSV processing for user ${userId}`);
+          try {
+            console.log(`Attempting coin deduction for CSV processing for user ${userId}`);
             
-            // Check if this is an anonymous user with free coins
-            const isAnonymousUser = userId?.startsWith('anonymous-') || userId?.startsWith('test-anonymous-');
+            // Calculate cost for this operation
+            let cost = 0;
             
-            if (isAnonymousUser) {
-              console.log(`Anonymous user ${userId} - not deducting coins for CSV processing`);
-              // Continue processing without coin deduction for anonymous users
+            // Calculate cost based on type and count
+            if (inputType === "file") {
+              // CSV files always use batch rate
+              cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE;
+            }
+            
+            // Minimum cost is 1 coin
+            cost = Math.max(cost, 1);
+            console.log(`CSV processing cost = ${cost} coins`);
+            
+            // Use the new utility function to deduct coins
+            const success = await deductCoinsForOperation(userId, 'BATCH_EXTRACT', cost);
+            
+            if (success) {
+              console.log(`✅ Coin deduction successful: ${cost} coins deducted for CSV processing`);
             } else {
-              // Calculate cost for this operation
-              let cost = 0;
-              
-              // Calculate cost based on type and count
-              if (inputType === "file") {
-                // CSV files always use batch rate
-                cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE;
-              }
-              
-              // Minimum cost is 1 coin
-              cost = Math.max(cost, 1);
-              console.log(`CSV processing cost = ${cost} coins`);
-              
-              // Use the new utility function to deduct coins
-              const deductionResult = await deductCoinsForOperation(userId, 'BATCH_EXTRACT', cost);
-              if (deductionResult.success) {
-                console.log(`✅ Coin deduction successful: ${cost} coins deducted for CSV processing. New balance: ${deductionResult.newBalance}`);
-              } else {
-                if (deductionResult.errorType === 'INSUFFICIENT_COINS') {
-                  console.warn(`⚠️ User ${userId} has insufficient coins (${deductionResult.currentBalance}/${deductionResult.requiredAmount}) for CSV processing - continuing anyway`);
-                } else {
-                  console.warn(`⚠️ Failed to deduct ${cost} coins for user ${userId}: ${deductionResult.error} - continuing CSV processing`);
-                }
-                // Continue processing instead of returning 402 error
-              }
+              console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
+              return NextResponse.json(
+                { error: "Insufficient coins for this operation" },
+                { status: 402 }
+              );
             }
           } catch (deductError) {
             console.error(`Error in direct coin deduction for user ${userId}:`, deductError);
