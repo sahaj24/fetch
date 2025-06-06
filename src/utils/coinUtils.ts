@@ -118,16 +118,32 @@ export async function getUserCoinsBalance(userId: string | undefined): Promise<n
 }
 
 /**
+ * Enhanced coin deduction result with detailed error information
+ */
+export interface CoinDeductionResult {
+  success: boolean;
+  error?: string;
+  errorType?: 'INSUFFICIENT_COINS' | 'SYSTEM_ERROR' | 'AUTH_ERROR' | 'DATABASE_ERROR';
+  currentBalance?: number;
+  requiredAmount?: number;
+  newBalance?: number;
+}
+
+/**
  * Deducts coins from a user's balance when they perform an operation
- * Returns true if successful, false if the user doesn't have enough coins or if there's an error
+ * Returns detailed result with error information for better debugging
  * 
  * IMPORTANT: This function handles deduction for ALL subscription tiers including Pro users
  */
-export async function deductCoinsForOperation(userId: string, operationType: OperationType, coinsToDeduct: number): Promise<boolean> {
+export async function deductCoinsForOperation(userId: string, operationType: OperationType, coinsToDeduct: number): Promise<CoinDeductionResult> {
   try {
     if (!userId) {
       console.error('❌ Cannot deduct coins: No user ID provided');
-      return false;
+      return {
+        success: false,
+        error: 'No user ID provided',
+        errorType: 'AUTH_ERROR'
+      };
     }
     
     console.log(`✅ deductCoinsForOperation called with userId=${userId}, operationType=${operationType}, coinsToDeduct=${coinsToDeduct}`);
@@ -148,7 +164,11 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       
     if (error) {
       console.error('❌ Error fetching user coins data:', error);
-      return false;
+      return {
+        success: false,
+        error: `Database error: ${error.message}`,
+        errorType: 'DATABASE_ERROR'
+      };
     }
     
     if (!data) {
@@ -168,7 +188,11 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
         
       if (insertError) {
         console.error('❌ Failed to create user coins record:', insertError);
-        return false;
+        return {
+          success: false,
+          error: `Failed to create user coins record: ${insertError.message}`,
+          errorType: 'DATABASE_ERROR'
+        };
       }
       
       // Fetch the newly created record
@@ -180,7 +204,11 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
         
       if (newFetchError || !newUserData) {
         console.error('❌ Still cannot find user coins record after creation attempt');
-        return false;
+        return {
+          success: false,
+          error: 'Could not create or fetch user coins record',
+          errorType: 'DATABASE_ERROR'
+        };
       }
       
       // Use the new user data for coin operations
@@ -194,7 +222,13 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       // Check if new user has enough coins
       if (currentBalance < coinsToDeduct) {
         console.error(`❌ New user ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
-        return false;
+        return {
+          success: false,
+          error: `Insufficient coins. Required: ${coinsToDeduct}, Available: ${currentBalance}`,
+          errorType: 'INSUFFICIENT_COINS',
+          currentBalance,
+          requiredAmount: coinsToDeduct
+        };
       }
       
       // Calculate new values
@@ -213,14 +247,22 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
         
       if (updateError) {
         console.error('❌ Error updating new user coins:', updateError);
-        return false;
+        return {
+          success: false,
+          error: `Failed to update user coins: ${updateError.message}`,
+          errorType: 'DATABASE_ERROR'
+        };
       }
       
       // Record the transaction
       await recordCoinTransaction(userId, operationType, -coinsToDeduct);
       
       console.log(`✅ Successfully deducted ${coinsToDeduct} coins from new user ${userId}. New balance: ${newBalance}`);
-      return true;
+      return {
+        success: true,
+        currentBalance: newBalance,
+        newBalance
+      };
     }
     
     // Process existing user
@@ -239,7 +281,13 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
     // Always check if the user has enough coins, regardless of subscription tier
     if (currentBalance < coinsToDeduct) {
       console.error(`❌ User ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
-      return false;
+      return {
+        success: false,
+        error: `Insufficient coins. Required: ${coinsToDeduct}, Available: ${currentBalance}`,
+        errorType: 'INSUFFICIENT_COINS',
+        currentBalance,
+        requiredAmount: coinsToDeduct
+      };
     }
 
     const newBalance = currentBalance - coinsToDeduct;
@@ -259,7 +307,11 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
         
     if (updateError) {
       console.error('❌ Error updating user coins:', updateError);
-      return false;
+      return {
+        success: false,
+        error: `Failed to update coins: ${updateError.message}`,
+        errorType: 'DATABASE_ERROR'
+      };
     }
     
     console.log(`✅ Database update successful for user ${userId}`);
@@ -279,10 +331,18 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
     }
 
     console.log(`✅ Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${newBalance}`);
-    return true;
+    return {
+      success: true,
+      currentBalance: newBalance,
+      newBalance
+    };
   } catch (error) {
     console.error('❌ Unexpected error in deductCoinsForOperation:', error);
-    return false;
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      errorType: 'SYSTEM_ERROR'
+    };
   }
 }
 
