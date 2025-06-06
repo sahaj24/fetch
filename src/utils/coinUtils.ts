@@ -126,7 +126,7 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       };
     }
     
-    console.log(`✅ deductCoinsForOperation called with userId=${userId}, operationType=${operationType}, coinsToDeduct=${coinsToDeduct}`);
+    console.log(`🔥 [COIN DEDUCTION] Starting deduction - userId=${userId}, operation=${operationType}, amount=${coinsToDeduct}`);
 
     // 1. First check if user exists and get current balance
     const { data: currentData, error: fetchError } = await supabase
@@ -136,44 +136,42 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       .single();
       
     if (fetchError) {
-      console.error('❌ Error fetching user coins data:', fetchError);
+      console.error('❌ [COIN DEDUCTION] Error fetching user coins data:', fetchError);
+      console.error('❌ [COIN DEDUCTION] Error code:', fetchError.code);
+      console.error('❌ [COIN DEDUCTION] Error details:', fetchError.details);
       
-      // If user doesn't exist, try to create them with initial coins using the secure function
+      // CRITICAL FIX: Only create new users for truly new accounts, not existing users with lookup issues
       if (fetchError.code === 'PGRST116') { // No rows returned
-        console.log('✅ User not found, creating new user with initial coins');
+        console.log('🔍 [COIN DEDUCTION] No user record found. Checking if this is truly a new user or a lookup issue...');
         
-        const transactionId = `signup_bonus_${Date.now()}`;
-        const { error: addError } = await supabase.rpc('add_user_coins', {
-          p_user_id: userId,
-          p_amount: 50, // Initial bonus
-          p_transaction_id: transactionId,
-          p_description: 'Signup bonus',
-          p_created_at: new Date().toISOString()
-        });
+        // Before creating a new user, let's try to initialize them through the safer initializeUserCoins function
+        console.log('🔧 [COIN DEDUCTION] Attempting to initialize user coins instead of creating new record');
+        const initialBalance = await initializeUserCoins(userId);
         
-        if (addError) {
-          console.error('❌ Failed to create user with initial coins:', addError);
+        if (initialBalance === null) {
+          console.error('❌ [COIN DEDUCTION] Failed to initialize user coins');
           return {
             success: false,
-            error: `Failed to create user: ${addError.message}`,
+            error: 'Failed to initialize user account',
             errorType: 'DATABASE_ERROR'
           };
         }
         
-        // Now check if they have enough coins (50 initial - coinsToDeduct)
-        if (50 < coinsToDeduct) {
+        console.log(`✅ [COIN DEDUCTION] User initialized with balance: ${initialBalance}`);
+        
+        // Now check if they have enough coins
+        if (initialBalance < coinsToDeduct) {
           return {
             success: false,
-            error: `Insufficient coins. Required: ${coinsToDeduct}, Available: 50`,
+            error: `Insufficient coins. Required: ${coinsToDeduct}, Available: ${initialBalance}`,
             errorType: 'INSUFFICIENT_COINS',
-            currentBalance: 50,
+            currentBalance: initialBalance,
             requiredAmount: coinsToDeduct
           };
         }
         
-        // Proceed with deduction for new user
-        const currentBalance = 50;
-        const newBalance = currentBalance - coinsToDeduct;
+        // Proceed with deduction for initialized user
+        const newBalance = initialBalance - coinsToDeduct;
         
         // Use the secure spend_user_coins function
         const spendTransactionId = `${operationType.toLowerCase()}_${Date.now()}`;
@@ -186,7 +184,7 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
         });
         
         if (spendError) {
-          console.error('❌ Error spending coins for new user:', spendError);
+          console.error('❌ [COIN DEDUCTION] Error spending coins for initialized user:', spendError);
           return {
             success: false,
             error: `Failed to spend coins: ${spendError.message}`,
@@ -194,7 +192,7 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
           };
         }
         
-        console.log(`✅ Successfully deducted ${coinsToDeduct} coins from new user ${userId}. New balance: ${newBalance}`);
+        console.log(`✅ [COIN DEDUCTION] Successfully deducted ${coinsToDeduct} coins from initialized user ${userId}. New balance: ${newBalance}`);
         return {
           success: true,
           currentBalance: newBalance,
@@ -210,7 +208,7 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
     }
     
     if (!currentData) {
-      console.error('❌ User coins record not found');
+      console.error('❌ [COIN DEDUCTION] User coins record not found after successful query');
       return {
         success: false,
         error: 'User coins record not found',
@@ -221,11 +219,11 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
     const currentBalance = currentData.balance || 0;
     const subscriptionTier = currentData.subscription_tier || 'FREE';
     
-    console.log(`📊 User ${userId} has subscription tier: ${subscriptionTier}, balance: ${currentBalance}`);
+    console.log(`📊 [COIN DEDUCTION] EXISTING USER FOUND - userId=${userId}, tier=${subscriptionTier}, balance=${currentBalance}`);
     
     // Check if user has enough coins
     if (currentBalance < coinsToDeduct) {
-      console.error(`❌ User ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
+      console.error(`❌ [COIN DEDUCTION] User ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
       return {
         success: false,
         error: `Insufficient coins. Required: ${coinsToDeduct}, Available: ${currentBalance}`,
@@ -237,7 +235,7 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
 
     const newBalance = currentBalance - coinsToDeduct;
 
-    console.log(`💰 Spending ${coinsToDeduct} coins for user ${userId}: balance ${currentBalance} -> ${newBalance}`);
+    console.log(`💰 [COIN DEDUCTION] PROCEEDING WITH DEDUCTION: ${coinsToDeduct} coins for user ${userId}: ${currentBalance} -> ${newBalance}`);
     
     // 2. Use the secure spend_user_coins RPC function that bypasses RLS
     const transactionId = `${operationType.toLowerCase()}_${Date.now()}`;
@@ -250,7 +248,7 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
     });
         
     if (spendError) {
-      console.error('❌ Error spending user coins:', spendError);
+      console.error('❌ [COIN DEDUCTION] Error spending user coins:', spendError);
       return {
         success: false,
         error: `Failed to spend coins: ${spendError.message}`,
@@ -258,7 +256,7 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       };
     }
     
-    console.log(`✅ Coin deduction successful for user ${userId}`);
+    console.log(`✅ [COIN DEDUCTION] SUCCESS! Coin deduction completed for user ${userId}`);
 
     // 3. Verify the update worked
     const { data: verifyData } = await supabase
@@ -268,17 +266,19 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       .single();
       
     if (verifyData) {
-      console.log(`✅ Verified new balance: ${verifyData.balance}`);
+      console.log(`✅ [COIN DEDUCTION] Verified new balance: ${verifyData.balance} (expected: ${newBalance})`);
     }
 
-    console.log(`✅ Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${newBalance}`);
+    console.log(`🎉 [COIN DEDUCTION] FINAL RESULT: Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${newBalance}`);
     return {
       success: true,
       currentBalance: newBalance,
       newBalance
     };
   } catch (error) {
-    console.error('❌ Unexpected error in deductCoinsForOperation:', error);
+    console.error('❌ [COIN DEDUCTION] CRITICAL ERROR in deductCoinsForOperation:', error);
+    console.error('❌ [COIN DEDUCTION] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('❌ [COIN DEDUCTION] Error details - userId:', userId, 'operationType:', operationType, 'coinsToDeduct:', coinsToDeduct);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
