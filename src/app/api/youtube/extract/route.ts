@@ -1030,13 +1030,13 @@ export async function POST(req: NextRequest) {
           }
             // Check if this is an anonymous user with free coins
           const isAnonymousUser = userId?.startsWith('anonymous-') || userId?.startsWith('test-anonymous-');
-          
-          if (isAnonymousUser) {
-            console.log(`Anonymous user ${userId} - not deducting coins`);
+            if (isAnonymousUser) {
+            console.log(`[COIN DEBUG] Anonymous user ${userId} - not deducting coins`);
             // Continue processing without coin deduction for anonymous users
           } else {
             // For authenticated users, attempt to deduct coins but continue processing regardless
-            console.log(`Attempting to deduct ${cost} coins for authenticated user ${userId}`);
+            console.log(`[COIN DEBUG] ⭐ STARTING COIN DEDUCTION: Attempting to deduct ${cost} coins for authenticated user ${userId}`);
+            console.log(`[COIN DEBUG] Input type: ${inputType}, Operation type will be: ${inputType === "url" ? "EXTRACT_SUBTITLES" : "BATCH_EXTRACT"}`);
             // Use a valid OperationType from the defined type
             const operationType = inputType === "url" ? "EXTRACT_SUBTITLES" : "BATCH_EXTRACT";
             const deductionResult = await deductCoinsForOperation(userId, operationType, cost);
@@ -1047,9 +1047,8 @@ export async function POST(req: NextRequest) {
               } else {
                 console.warn(`⚠️ Failed to deduct ${cost} coins for user ${userId}: ${deductionResult.error} - continuing processing`);
               }
-              // Continue processing regardless of coin deduction failure
-            } else {
-              console.log(`✅ Successfully deducted ${cost} coins from user ${userId}. New balance: ${deductionResult.newBalance}`);
+              // Continue processing regardless of coin deduction failure            } else {
+              console.log(`[COIN DEBUG] ✅ COIN DEDUCTION COMPLETED: Successfully deducted ${cost} coins from user ${userId}. New balance: ${deductionResult.newBalance}`);
             }
           }
         } catch (deductError) {
