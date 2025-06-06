@@ -70,13 +70,12 @@ export default function InputSection({
   const [csvPreview, setCsvPreview] = useState<string[]>([]);
   const [csvStats, setCsvStats] = useState<CSVStats | null>(null);
   const [isAnalyzingCsv, setIsAnalyzingCsv] = useState(false);
-  
-  // Track video counts and playlist status for coin calculation
+    // Track video counts and playlist status for coin calculation
   const [videoCount, setVideoCount] = useState(1);
   const [isPlaylist, setIsPlaylist] = useState(false);
   const [isLoadingPlaylistInfo, setIsLoadingPlaylistInfo] = useState(false);
   const [playlistInfo, setPlaylistInfo] = useState<PlaylistInfo | null>(null);
-
+  const [instantPlaylistInfo, setInstantPlaylistInfo] = useState<{ id: string; isValid: boolean } | null>(null);
   // Function to extract playlist ID from URL
   const extractPlaylistId = (url: string): string | null => {
     // Extract playlist ID from various YouTube URL formats
@@ -92,7 +91,17 @@ export default function InputSection({
     return null;
   };
 
-  // Function to fetch playlist info including video count
+  // Function to show immediate playlist feedback
+  const getInstantPlaylistInfo = (url: string): { id: string; isValid: boolean } | null => {
+    const playlistId = extractPlaylistId(url);
+    if (!playlistId) return null;
+    
+    // Basic validation for playlist ID format
+    const isValid = /^[a-zA-Z0-9_-]+$/.test(playlistId) && playlistId.length > 10;
+    
+    return { id: playlistId, isValid };
+  };
+  // Function to fetch playlist info including video count (debounced)
   const fetchPlaylistInfo = async (url: string) => {
     const playlistId = extractPlaylistId(url);
     
@@ -140,41 +149,48 @@ export default function InputSection({
     } finally {
       setIsLoadingPlaylistInfo(false);
     }
-  };
-
-  // Effect to update coin calculation when URL changes
+  };  // Effect to update coin calculation when URL changes
   useEffect(() => {
     if (inputType === "url") {
+      // Check for instant playlist info
+      const instantInfo = getInstantPlaylistInfo(url);
+      setInstantPlaylistInfo(instantInfo);
+      
       // Check if the URL is a playlist or channel
       const isPlaylistUrl = url.includes('playlist') || url.includes('list=');
       const isChannelUrl = url.includes('channel/') || url.includes('/c/') || url.includes('@');
-      
+
       // Update state
       setIsPlaylist(isPlaylistUrl || isChannelUrl);
       
-      // For playlists, fetch actual video count
-      if (isPlaylistUrl && url.trim().length > 15) {
-        fetchPlaylistInfo(url);
-      } else if (isChannelUrl) {
-        // For channels, we'll estimate 15 videos by default
-        setVideoCount(15);
-        
-        // Emit changes for coin calculation
-        onInputChange({
-          videoCount: 15,
-          isPlaylist: true
-        });
-      } else {
-        // For single videos, use 1
-        setVideoCount(1);
-        setPlaylistInfo(null);
-        
-        // Emit changes for coin calculation
-        onInputChange({
-          videoCount: 1,
-          isPlaylist: false
-        });
-      }
+      // Debounce playlist info fetching
+      const timeoutId = setTimeout(() => {
+        // For playlists, fetch actual video count
+        if (isPlaylistUrl && url.trim().length > 15) {
+          fetchPlaylistInfo(url);
+        } else if (isChannelUrl) {
+          // For channels, we'll estimate 15 videos by default
+          setVideoCount(15);
+          
+          // Emit changes for coin calculation
+          onInputChange({
+            videoCount: 15,
+            isPlaylist: true
+          });
+        } else {
+          // For single videos, use 1
+          setVideoCount(1);
+          setPlaylistInfo(null);
+          
+          // Emit changes for coin calculation
+          onInputChange({
+            videoCount: 1,
+            isPlaylist: false
+          });
+        }
+      }, 300); // 300ms debounce
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [url, inputType, onInputChange]);
 
@@ -449,11 +465,23 @@ export default function InputSection({
               onChange={(e) => setUrl(e.target.value)}
               disabled={isProcessing}
               className="bg-white/60 backdrop-blur-sm border-black/10 shadow-sm h-11 input-focus-ring"
-            />
-            <p className="text-sm text-muted-foreground">
+            />            <p className="text-sm text-muted-foreground">
               Enter a YouTube playlist URL to batch process all videos in the playlist at once.
             </p>
           </div>
+          
+          {/* Instant playlist ID feedback */}
+          {instantPlaylistInfo && (
+            <div className="mt-2 p-2 bg-green-50/70 border border-green-100 rounded-md">
+              <div className="text-sm text-green-800">
+                <span className="font-medium">✓ Playlist detected</span>
+                <span className="text-xs text-green-600 block mt-0.5">
+                  ID: {instantPlaylistInfo.id} 
+                  {!instantPlaylistInfo.isValid && " (format may be invalid)"}
+                </span>
+              </div>
+            </div>
+          )}
           
           {/* Coin estimate for URL */}
           {url && (
