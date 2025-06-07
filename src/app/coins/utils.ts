@@ -112,10 +112,9 @@ export async function getOrCreateUserCoinsDocument(userId: string): Promise<User
     throw new Error('Cannot get/create coins without a user ID');
   }
 
-  try {
-    // First check if the document already exists
+  try {    // First check if the document already exists
     const { data: existingCoins, error: fetchError } = await supabase
-      .from('userCoins')
+      .from('user_coins')
       .select('*')
       .eq('user_id', userId)
       .single();
@@ -148,14 +147,13 @@ export async function getOrCreateUserCoinsDocument(userId: string): Promise<User
       balance: 50,
       totalEarned: 50,
       totalSpent: 0,
-      subscriptionTier: 'FREE',
-      lastCoinRefresh: now,
+      subscriptionTier: 'FREE',      lastCoinRefresh: now,
       transactionHistory: [welcomeTransaction]
     };
     
     // Use upsert pattern (insert with onConflict do nothing)
     const { data: insertedData, error: insertError } = await supabase
-      .from('userCoins')
+      .from('user_coins')
       .upsert([{ user_id: userId, ...newCoins }])
       .select('*')
       .single();
@@ -176,12 +174,11 @@ export async function getOrCreateUserCoinsDocument(userId: string): Promise<User
     
     // Final fallback - try once more to get the document
     // This handles the case where another process created it after we checked
-    try {
-      console.log("FALLBACK: Checking if document exists after error");
+    try {      console.log("FALLBACK: Checking if document exists after error");
       const { data: fallbackData } = await supabase
-        .from('userCoins')
+        .from('user_coins')
         .select('*')
-        .eq('id', userId)
+        .eq('user_id', userId)
         .single();
       
       if (fallbackData) {
@@ -222,10 +219,9 @@ export async function initializeUserCoins(userId: string): Promise<UserCoins> {
       // If we've already verified this document exists in this session, skip the check
       if (verifiedDocuments.has(userId)) {
         console.log(`Document for user ${userId} was already verified/created this session`);
-        
-        // Still try to get the latest data
+          // Still try to get the latest data
         const { data } = await supabase
-          .from('userCoins')
+          .from('user_coins')
           .select('*')
           .eq('user_id', userId)
           .single();
@@ -237,10 +233,9 @@ export async function initializeUserCoins(userId: string): Promise<UserCoins> {
         // Should never happen if document was verified
         throw new Error('Verified document not found');
       }
-      
-      // Check if user already has a coins document
+        // Check if user already has a coins document
       const { data: existingData, error: existingError } = await supabase
-        .from('userCoins')
+        .from('user_coins')
         .select('*')
         .eq('user_id', userId)
         .single();
@@ -277,10 +272,9 @@ export async function initializeUserCoins(userId: string): Promise<UserCoins> {
         lastCoinRefresh: now,
         transactionHistory: [welcomeTransaction]
       };
-      
-      // Insert the new document
+        // Insert the new document
       const { data: insertedData, error: insertError } = await supabase
-        .from('userCoins')
+        .from('user_coins')
         .insert([{ user_id: userId, ...newCoins }]) // Changed 'id' to 'user_id' to be consistent
         .select('*')
         .single();
@@ -723,58 +717,39 @@ export async function directCoinDeduction(
 }
 
 /**
- * Ensure the userCoins table exists in the database
+ * Ensure the user_coins table exists in the database
  */
-async function ensureUserCoinsTable(): Promise<boolean> {
-  try {
-    console.log("🏗️ Checking if userCoins table exists...");
+async function ensureUserCoinsTable(): Promise<boolean> {try {
+    console.log("🏗️ Checking if user_coins table exists...");
     
-    // First check if the table exists
-    const { data: tables, error: tablesError } = await supabase
-      .from('pg_catalog.pg_tables')
-      .select('tablename')
-      .eq('schemaname', 'public');
+    // Simple check: try to query the table directly
+    const { data, error } = await supabase
+      .from('user_coins')
+      .select('user_id')
+      .limit(1);
     
-    if (tablesError) {
-      console.error("❌ Error checking tables:", tablesError);
-      return false;
-    }
-    
-    // Check for different case variations of the table name
-    const tableExists = tables && tables.some(t => 
-      t.tablename === 'userCoins' || 
-      t.tablename === 'user_coins' || 
-      t.tablename === 'usercoins'
-    );
-    
-    // Log all available tables to help with debugging
-    console.log("📊 Available tables:", tables ? tables.map(t => t.tablename).join(', ') : 'none');
-    console.log("📋 Coin table exists:", tableExists);
-    
-    if (!tableExists) {
-      console.log("🔧 Creating userCoins table...");
-      
-      // We need to use a service role key or SQL to create tables
-      // For now, let's just make sure we handle the case when the table doesn't exist
-      console.log("⚠️ Cannot automatically create table. Please create the userCoins table manually with the following structure:");
-      console.log(`
-        CREATE TABLE public."userCoins" (
-          user_id UUID PRIMARY KEY,
-          balance INTEGER DEFAULT 0,
-          "totalEarned" INTEGER DEFAULT 0,
-          "totalSpent" INTEGER DEFAULT 0,
-          "subscriptionTier" TEXT DEFAULT 'FREE',
-          "lastCoinRefresh" TIMESTAMP WITH TIME ZONE,
-          "subscriptionStart" TIMESTAMP WITH TIME ZONE,
-          "subscriptionEnd" TIMESTAMP WITH TIME ZONE,
-          "transactionHistory" JSONB DEFAULT '[]'::jsonb
-        );
-      `);
-    }
-    
+    if (error) {
+      // If error contains "relation does not exist", the table doesn't exist
+      if (error.message && error.message.includes('relation') && error.message.includes('does not exist')) {
+        console.log("📋 Table user_coins does not exist");
+        console.log("⚠️ Please create the user_coins table manually or run the database setup script");
+        return false;
+      } else {
+        // Some other error, but table likely exists
+        console.log("📋 Table user_coins exists but encountered an error:", error.message);
+        return true;
+      }
+    }    
+    console.log("✅ Table user_coins exists and is accessible");
     return true;
   } catch (error) {
-    console.error("❌ Error ensuring userCoins table:", error);
+    console.error("❌ Error ensuring user_coins table:", {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      code: (error as any)?.code,
+      details: (error as any)?.details,
+      hint: (error as any)?.hint,
+      fullError: error
+    });
     return false;
   }
 }
