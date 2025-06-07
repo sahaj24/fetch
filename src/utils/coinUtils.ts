@@ -31,43 +31,23 @@ export async function initializeUserCoins(userId: string): Promise<number | null
       }
     }
 
-    // If there's no record, create one with 50 coins
+    // If there's no record, create one with 50 coins using the add_user_coins function
     if (!existingCoins) {
       console.log('Creating new user coins record with 50 coins welcome bonus');
       
-      // Direct insert to create the user_coins record
-      const { error } = await supabase
-        .from('user_coins')
-        .insert({
-          user_id: userId,
-          balance: 50,
-          total_earned: 50,
-          total_spent: 0,
-          subscription_tier: 'FREE',
-          last_coin_refresh: new Date().toISOString()
-        });
+      // Use the add_user_coins function which has SECURITY DEFINER and can bypass RLS
+      const transactionId = `welcome_${Date.now()}`;
+      const { error } = await supabase.rpc('add_user_coins', {
+        p_user_id: userId,
+        p_amount: 50,
+        p_transaction_id: transactionId,
+        p_description: 'Welcome bonus',
+        p_created_at: new Date().toISOString()
+      });
       
       if (error) {
-        console.error('Error creating user coins record:', error);
+        console.error('Error creating user coins record via add_user_coins:', error);
         return null;
-      }
-      
-      // Also record the transaction
-      const transactionId = `welcome_${Date.now()}`;
-      const { error: transError } = await supabase
-        .from('coin_transactions')
-        .insert({
-          user_id: userId,
-          transaction_id: transactionId,
-          type: 'EARNED',
-          amount: 50,
-          description: 'Welcome bonus',
-          created_at: new Date().toISOString()
-        });
-        
-      if (transError) {
-        console.error('Error recording welcome transaction:', transError);
-        // Continue anyway since the coins were added
       }
       
       console.log('Successfully created user coins with welcome bonus');
@@ -148,79 +128,39 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       
     if (error) {
       console.error('❌ Error fetching user coins data:', error);
+      
+      // If the user doesn't exist (no rows returned), try to initialize them
+      if (error.code === 'PGRST116') {
+        console.log('🆕 User coins record not found, initializing with 50 coins...');
+        
+        const initialBalance = await initializeUserCoins(userId);
+        if (initialBalance === null) {
+          console.error('❌ Failed to initialize user coins');
+          return false;
+        }
+        
+        // Now try the coin deduction again with the new record
+        console.log('✅ User coins initialized, retrying deduction...');
+        return await deductCoinsForOperation(userId, operationType, coinsToDeduct);
+      }
+      
       return false;
     }
     
     if (!data) {
       console.error('❌ User coins record not found for user_id:', userId);
       
-      // Try to create a new record for the user
-      console.log('✅ Creating new coin record for user');
-      const { error: insertError } = await supabase
-        .from('user_coins')
-        .insert({
-          user_id: userId,
-          balance: 50, // Give them 50 starter coins
-          total_earned: 50,
-          total_spent: 0,
-          subscription_tier: 'FREE'
-        });
-        
-      if (insertError) {
-        console.error('❌ Failed to create user coins record:', insertError);
+      // Try to initialize the user with coins
+      console.log('✅ Initializing new coin record for user');
+      const initialBalance = await initializeUserCoins(userId);
+      if (initialBalance === null) {
+        console.error('❌ Failed to initialize user coins');
         return false;
       }
       
-      // Fetch the newly created record
-      const { data: newUserData, error: newFetchError } = await supabase
-        .from('user_coins')
-        .select('balance, total_spent, subscription_tier')
-        .eq('user_id', userId)
-        .single();
-        
-      if (newFetchError || !newUserData) {
-        console.error('❌ Still cannot find user coins record after creation attempt');
-        return false;
-      }
-      
-      // Use the new user data for coin operations
-      console.log('✅ New user record created successfully:', newUserData);
-      
-      // Get values from the new record
-      const currentBalance = newUserData.balance || 0;
-      const totalSpent = newUserData.total_spent || 0;
-      const subscriptionTier = (newUserData.subscription_tier || 'FREE').toUpperCase();
-      
-      // Check if new user has enough coins
-      if (currentBalance < coinsToDeduct) {
-        console.error(`❌ New user ${userId} doesn't have enough coins. Balance: ${currentBalance}, Required: ${coinsToDeduct}`);
-        return false;
-      }
-      
-      // Calculate new values
-      const newBalance = currentBalance - coinsToDeduct;
-      const newTotalSpent = totalSpent + coinsToDeduct;
-      
-      // Update the database with the new values
-      const { error: updateError } = await supabase
-        .from('user_coins')
-        .update({
-          balance: newBalance,
-          total_spent: newTotalSpent,
-          subscription_tier: subscriptionTier
-        })
-        .eq('user_id', userId);
-        
-      if (updateError) {
-        console.error('❌ Error updating new user coins:', updateError);
-        return false;
-      }
-      
-      // Record the transaction
-      await recordCoinTransaction(userId, operationType, -coinsToDeduct);
-      
-      console.log(`✅ Successfully deducted ${coinsToDeduct} coins from new user ${userId}. New balance: ${newBalance}`);
-      return true;
+      // Retry the deduction with the new record
+      console.log('✅ User coins initialized, retrying deduction...');
+      return await deductCoinsForOperation(userId, operationType, coinsToDeduct);
     }
     
     // Process existing user
