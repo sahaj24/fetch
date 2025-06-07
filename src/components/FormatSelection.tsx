@@ -59,6 +59,15 @@ const FormatSelection = ({
   const [formats, setFormats] = useState<string[]>(selectedFormats);
   const [language, setLanguage] = useState<string>(selectedLanguage);
 
+  // Sync internal state when props change
+  useEffect(() => {
+    setFormats(selectedFormats);
+  }, [selectedFormats]);
+
+  useEffect(() => {
+    setLanguage(selectedLanguage);
+  }, [selectedLanguage]);
+
   // Grouped format options by category for better organization
   const formatCategories = [
     {

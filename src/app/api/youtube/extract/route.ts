@@ -28,12 +28,45 @@ type TranscriptCache = {
   };
 };
 
-// Cache will expire after 10 minutes
-const CACHE_EXPIRY_MS = 10 * 60 * 1000;
+// Negative cache for videos that don't have subtitles
+type NegativeCache = {
+  [key: string]: {
+    reason: 'SUBTITLES_DISABLED' | 'UNAVAILABLE' | 'PRIVATE';
+    timestamp: number;
+  };
+};
+
+// Cache will expire after 15 minutes for successful results (increased from 10)
+// Negative cache expires after 3 minutes for failed results (decreased from 5)
+const CACHE_EXPIRY_MS = 15 * 60 * 1000;
+const NEGATIVE_CACHE_EXPIRY_MS = 3 * 60 * 1000;
 const transcriptCache: TranscriptCache = {};
+const negativeCache: NegativeCache = {};
+
+// Cache cleanup function to prevent memory issues
+function cleanupCaches() {
+  const now = Date.now();
+  
+  // Clean up expired positive cache entries
+  for (const key in transcriptCache) {
+    if (now - transcriptCache[key].timestamp > CACHE_EXPIRY_MS) {
+      delete transcriptCache[key];
+    }
+  }
+  
+  // Clean up expired negative cache entries
+  for (const key in negativeCache) {
+    if (now - negativeCache[key].timestamp > NEGATIVE_CACHE_EXPIRY_MS) {
+      delete negativeCache[key];
+    }
+  }
+}
+
+// Run cache cleanup every 5 minutes
+setInterval(cleanupCaches, 5 * 60 * 1000);
 
 // Constants for batch processing
-const MAX_CONCURRENT_REQUESTS = 5; // Maximum number of concurrent transcript requests
+const MAX_CONCURRENT_REQUESTS = 3; // Reduced from 5 to avoid overwhelming the system
 // No maximum limit on videos per batch - process all URLs
 const MAX_VIDEOS_PER_BATCH = Number.MAX_SAFE_INTEGER; // Effectively unlimited
 
@@ -97,11 +130,23 @@ async function extractSubtitles(url: string, format: string, language: string): 
       url,
       isPlaylistOrChannel: true,
       downloadUrl: ``
-    };
-  } else {
-    // This is a single video URL - check the cache first
+    };  } else {
+    // This is a single video URL - check negative cache first to avoid repeated failures
     const cacheKey = `${videoId}-${language}`;
     const now = Date.now();
+    
+    // Check negative cache first
+    if (negativeCache[cacheKey] && 
+        (now - negativeCache[cacheKey].timestamp) < NEGATIVE_CACHE_EXPIRY_MS) {
+      const cachedFailure = negativeCache[cacheKey];
+      if (cachedFailure.reason === 'SUBTITLES_DISABLED') {
+        throw new Error(`Creator has disabled subtitles for this video (cached result)`);
+      } else if (cachedFailure.reason === 'UNAVAILABLE') {
+        throw new Error(`This video is private or unavailable and cannot be processed (cached result)`);
+      } else if (cachedFailure.reason === 'PRIVATE') {
+        throw new Error(`This video is private and cannot be accessed (cached result)`);
+      }
+    }
     
     // Check if we have this transcript in cache and it's not expired
     if (transcriptCache[cacheKey] && 
@@ -154,89 +199,106 @@ async function extractSubtitles(url: string, format: string, language: string): 
       content: formattedContent,
       url,
       downloadUrl: `/api/youtube/download?id=${actualVideoId}&format=${format}&lang=${language}`,
-    };
-  } catch (error: any) {
+    };  } catch (error: any) {
     console.error("Error extracting real transcript:", error);
     
-    // Provide a more user-friendly error message
+    const cacheKey = `${actualVideoId}-${language}`;
+    const now = Date.now();
+    
+    // Handle the new classified error types from the optimized fetchTranscript function
+    if (error.message?.startsWith('SUBTITLES_DISABLED:')) {
+      // Cache this failure to avoid repeated requests
+      negativeCache[cacheKey] = {
+        reason: 'SUBTITLES_DISABLED',
+        timestamp: now
+      };
+      // This is a confirmed case where creator has disabled subtitles
+      throw new Error(`Creator has disabled subtitles for this video: ${videoInfo.title}`);
+    }
+    
+    if (error.message?.startsWith('TIMEOUT:')) {
+      // Don't cache timeout errors as they might be temporary
+      // This is a timeout error - suggest retry
+      throw new Error(`Video processing timed out. This may be a temporary issue - please try again in a few moments.`);
+    }
+    
+    if (error.message?.startsWith('UNAVAILABLE:')) {
+      // Cache this failure
+      negativeCache[cacheKey] = {
+        reason: 'UNAVAILABLE',
+        timestamp: now
+      };
+      // Video is private or unavailable
+      throw new Error(`This video is private or unavailable and cannot be processed.`);
+    }    
+    // For old-style error messages that don't have our new classification
     if (error.message?.includes("Could not find any transcripts") || 
         error.message?.includes("No transcript available")) {
       
-      // If language-specific error, suggest trying 'auto' or 'en'
-      if (language !== 'en' && language !== 'auto') {
-        try {
-          // Try with auto-detect language as fallback
-          const transcript = await fetchTranscript(actualVideoId, 'auto');
-          const formattedContent = await formatTranscript(transcript, format, videoInfo.title);
-          
-          return {
-            id: `${actualVideoId}-${format}-auto`,
-            videoTitle: videoInfo.title,
-            language: 'Auto-detected',
-            format,
-            fileSize: `${Math.ceil(formattedContent.length / 1024)}KB`,
-            content: formattedContent,
-            url,
-            downloadUrl: `/api/youtube/download?id=${actualVideoId}&format=${format}&lang=auto`,
-            notice: `Requested language '${getLanguageName(language)}' was not available. Using auto-detected subtitles instead.`
-          };
-        } catch (fallbackError) {
-          console.error("Fallback to auto-detect also failed:", fallbackError);
-        }
-      }
-      
+      // Cache as subtitles disabled since fetchTranscript now handles language fallback internally
+      negativeCache[cacheKey] = {
+        reason: 'SUBTITLES_DISABLED',
+        timestamp: now
+      };
       // If everything fails, inform the user that no transcripts are available
-      throw new Error(`No subtitles are available for this video. YouTube may not provide captions for this content.`);
+      throw new Error(`No subtitles are available for this video: ${videoInfo.title}. The creator may have disabled captions.`);
     }
-    
-    // Only as an absolute last resort, fall back to generated mock subtitles
-    const subtitleData = await generateSubtitles(videoInfo.title, format);
-    const generatedContent = subtitleData.content;
-    
-    return {
-      id: `${actualVideoId}-${format}-${language}`,
-      videoTitle: videoInfo.title,
-      language: getLanguageName(language),
-      format,
-      fileSize: `${Math.ceil(generatedContent.length / 1024)}KB`,
-      content: generatedContent,
-      url,
-      downloadUrl: `/api/youtube/download?id=${actualVideoId}&format=${format}&lang=${language}`,
-      isGenerated: true, // Flag to indicate these are generated rather than real
-      error: `Could not extract real subtitles: ${error.message || 'Unknown error'}`
-    };
+      // For unknown errors, provide better messaging but don't generate fake subtitles
+    throw new Error(`Failed to extract subtitles from video: ${videoInfo.title}. Error: ${error.message}`);
   }
 }
+
+// Pre-compiled regex patterns for HTML entity decoding (performance optimization)
+const HTML_ENTITY_PATTERNS = {
+  doubleEncodedNumeric: /&amp;#(\d+);/g,
+  doubleEncodedHex: /&amp;#x([0-9a-fA-F]+);/g,
+  amp: /&amp;/g,
+  lt: /&lt;/g,
+  gt: /&gt;/g,
+  quot: /&quot;/g,
+  apos1: /&#39;/g,
+  apos2: /&apos;/g,
+  nbsp: /&nbsp;/g,
+  numeric: /&#(\d+);/g,
+  hex: /&#x([0-9a-fA-F]+);/g,
+  rsquo: /&rsquo;/g,
+  lsquo: /&lsquo;/g,
+  rdquo: /&rdquo;/g,
+  ldquo: /&ldquo;/g,
+  mdash: /&mdash;/g,
+  ndash: /&ndash;/g
+};
 
 // Helper function to format transcript data into different subtitle formats
 async function formatTranscript(transcript: any[], format: string, videoTitle: string) {
   if (!transcript || transcript.length === 0) {
     throw new Error("No transcript data available");
   }
-    // Create a helper function to decode HTML entities for all formats
+  
+  // Optimized helper function to decode HTML entities using pre-compiled patterns
   const decodeHtmlEntities = (text: string): string => {
     return text
       // Handle double-encoded entities first (like &amp;#39;)
-      .replace(/&amp;#(\d+);/g, (match, dec) => String.fromCharCode(parseInt(dec)))
-      .replace(/&amp;#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(HTML_ENTITY_PATTERNS.doubleEncodedNumeric, (match, dec) => String.fromCharCode(parseInt(dec)))
+      .replace(HTML_ENTITY_PATTERNS.doubleEncodedHex, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
       // Handle standard named entities
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&apos;/g, "'")
-      .replace(/&nbsp;/g, ' ')
+      .replace(HTML_ENTITY_PATTERNS.amp, '&')
+      .replace(HTML_ENTITY_PATTERNS.lt, '<')
+      .replace(HTML_ENTITY_PATTERNS.gt, '>')
+      .replace(HTML_ENTITY_PATTERNS.quot, '"')
+      .replace(HTML_ENTITY_PATTERNS.apos1, "'")
+      .replace(HTML_ENTITY_PATTERNS.apos2, "'")
+      .replace(HTML_ENTITY_PATTERNS.nbsp, ' ')
       // Handle numbered entities
-      .replace(/&#(\d+);/g, (match, dec) => String.fromCharCode(parseInt(dec)))
-      .replace(/&#x([0-9a-fA-F]+);/g, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(HTML_ENTITY_PATTERNS.numeric, (match, dec) => String.fromCharCode(parseInt(dec)))
+      .replace(HTML_ENTITY_PATTERNS.hex, (match, hex) => String.fromCharCode(parseInt(hex, 16)))
       // Handle common special cases
-      .replace(/&rsquo;/g, "'")
-      .replace(/&lsquo;/g, "'")
-      .replace(/&rdquo;/g, '"')
-      .replace(/&ldquo;/g, '"')
-      .replace(/&mdash;/g, '—')
-      .replace(/&ndash;/g, '–');
+      .replace(HTML_ENTITY_PATTERNS.rsquo, "'")
+      .replace(HTML_ENTITY_PATTERNS.lsquo, "'")
+      .replace(HTML_ENTITY_PATTERNS.rdquo, '"')
+      .replace(HTML_ENTITY_PATTERNS.ldquo, '"')
+      .replace(HTML_ENTITY_PATTERNS.mdash, '—')
+      .replace(HTML_ENTITY_PATTERNS.ndash, '–');
   };
   
   // Pre-process all transcript items to decode HTML entities

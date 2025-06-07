@@ -170,13 +170,18 @@ export async function fetchTranscript(videoId: string, language: string = 'en'):
     // Create a temporary directory for subtitle files
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fetchsub-'));
     const subtitlePath = path.join(tempDir, 'subtitle');
-    
-    try {
-      // Try auto-generated subtitles directly (skip regular subtitles attempt to save time)
-      const autoSubCommand = `yt-dlp --no-warnings --skip-download --write-auto-sub --sub-format vtt --output "${subtitlePath}" -- ${videoId}`;
+      try {      // Try auto-generated subtitles directly with aggressive flags for speed
+      const autoSubCommand = `yt-dlp --no-warnings --skip-download --write-auto-sub --sub-format vtt --no-playlist --no-check-certificate --prefer-insecure --socket-timeout 10 --output "${subtitlePath}" -- ${videoId}`;
       
-      // Use a shorter timeout to avoid long waits
-      await execPromise(autoSubCommand, { timeout: 15000 });
+      // Use Promise.race for better timeout control with a shorter timeout
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new Error('TIMEOUT: Operation timed out after 8 seconds')), 8000);
+      });
+      
+      const ytdlpPromise = execPromise(autoSubCommand, { timeout: 8000 });
+      
+      // Race between the command execution and timeout
+      await Promise.race([ytdlpPromise, timeoutPromise]);
       
       // Find and parse VTT files
       const vttFiles = fs.readdirSync(tempDir).filter(file => file.endsWith('.vtt'));
@@ -184,7 +189,7 @@ export async function fetchTranscript(videoId: string, language: string = 'en'):
       if (vttFiles.length > 0) {
         const vttFilePath = path.join(tempDir, vttFiles[0]);
         const vttContent = fs.readFileSync(vttFilePath, 'utf8');
-        return parseVttContent(vttContent);
+        return parseVttContentAsync(vttContent);
       }
       
       throw new Error('No subtitle files found');
@@ -195,25 +200,145 @@ export async function fetchTranscript(videoId: string, language: string = 'en'):
       } catch (cleanupError) {
         // Ignore cleanup errors to keep things fast
       }
-    }
-  } catch (error: any) {
-    // console.error(`Failed to fetch transcript: ${error.message}`);
+    }  } catch (error: any) {
+    // Implement classified error types for better error handling
+    console.error(`Failed to fetch transcript for ${videoId}: ${error.message}`);
     
-    // Generate placeholder transcript instead of failing
-    // This makes the process continue even if subtitles can't be fetched
-    return [
-      {
-        text: `Subtitles are not available for this video (${videoId}).`,
-        offset: 0,
-        duration: 3000
-      },
-      {
-        text: "This could be because the creator disabled subtitles or YouTube hasn't generated them yet.",
-        offset: 3000,
-        duration: 4000
-      }
-    ];
+    // Classify the error based on error message and type
+    if (error.code === 'TIMEOUT' || error.message?.includes('timeout') || error.message?.includes('timed out')) {
+      throw new Error(`TIMEOUT: Video processing timed out after 8 seconds. This may be a temporary network issue.`);
+    }
+    
+    if (error.message?.includes('Private video') || error.message?.includes('This video is unavailable')) {
+      throw new Error(`UNAVAILABLE: This video is private or unavailable and cannot be processed.`);
+    }
+    
+    if (error.message?.includes('Subtitles are disabled') || 
+        error.message?.includes('No automatic captions') ||
+        error.message?.includes('no subtitles available') ||
+        error.message?.includes('No subtitle files found')) {
+      throw new Error(`SUBTITLES_DISABLED: Creator has disabled subtitles for this video.`);
+    }
+    
+    // For any other errors, classify as unknown
+    throw new Error(`UNKNOWN_ERROR: Failed to extract subtitles: ${error.message}`);
   }
+}
+
+// Async VTT parsing for better responsiveness with large transcripts
+async function parseVttContentAsync(vttContent: string): Promise<TranscriptItem[]> {
+  const lines = vttContent.split(/\r?\n/);
+  const transcript: TranscriptItem[] = [];
+  
+  let currentText = '';
+  let currentStart = 0;
+  let currentDuration = 0;
+  let inSubtitleBlock = false;
+  let processedLines = 0;
+  
+  // Skip the header lines (WEBVTT and other metadata)
+  let i = 0;
+  while (i < lines.length && !lines[i].includes('-->')) {
+    i++;
+  }
+  
+  // Process each subtitle block with periodic yielding
+  for (; i < lines.length; i++) {
+    const line = lines[i].trim();
+    processedLines++;
+    
+    // Yield control to event loop every 100 lines
+    if (processedLines % 100 === 0) {
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    
+    // Time line (start --> end)
+    if (line.includes('-->')) {
+      // Save previous block if it exists
+      if (inSubtitleBlock && currentText) {
+        transcript.push({
+          text: cleanVttText(currentText),
+          offset: currentStart,
+          duration: currentDuration
+        });
+      }
+      
+      // Parse timing, ignoring VTT positioning attributes
+      const timePart = line.split('-->');
+      if (timePart.length >= 2) {
+        const startTime = timePart[0].trim();
+        const endTimePart = timePart[1].trim().split(' ')[0]; // Remove positioning attributes
+        currentStart = parseVttTime(startTime);
+        const end = parseVttTime(endTimePart);
+        currentDuration = end - currentStart;
+      }
+      
+      // Reset for new block
+      currentText = '';
+      inSubtitleBlock = true;
+    }
+    // Text line
+    else if (line && !line.match(/^\d+$/) && !line.match(/^WEBVTT/) && !line.match(/^Kind:|^Language:/)) {
+      // Skip lines that are just whitespace or positioning info
+      if (line.match(/^align:|^position:|^\s*$/)) {
+        continue;
+      }
+      
+      // For auto-generated subtitles, prefer lines without inline timing tags
+      const hasTimingTags = line.includes('<') && line.includes('>');
+      const cleanedLine = cleanVttText(line);
+      
+      if (!hasTimingTags && cleanedLine) {
+        currentText = cleanedLine;
+      } else if (!currentText && cleanedLine) {
+        currentText = cleanedLine;
+      }
+    }
+    // Empty line - end of a subtitle block
+    else if (!line && inSubtitleBlock && currentText) {
+      transcript.push({
+        text: cleanVttText(currentText),
+        offset: currentStart,
+        duration: currentDuration
+      });
+      currentText = '';
+      inSubtitleBlock = false;
+    }
+  }
+  
+  // Handle the last block if it exists
+  if (inSubtitleBlock && currentText) {
+    transcript.push({
+      text: cleanVttText(currentText),
+      offset: currentStart,
+      duration: currentDuration
+    });
+  }
+  
+  // Post-process to remove duplicate entries
+  const deduplicatedTranscript = [];
+  const seenTexts = new Set();
+  
+  for (let j = 0; j < transcript.length; j++) {
+    // Yield control periodically during deduplication too
+    if (j % 100 === 0 && j > 0) {
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    
+    const item = transcript[j];
+    const normalizedText = item.text.toLowerCase().trim();
+    
+    if (normalizedText.length >= 2) {
+      const recentTexts = deduplicatedTranscript.slice(-5).map(t => t.text.toLowerCase().trim());
+      
+      if (!recentTexts.includes(normalizedText)) {
+        deduplicatedTranscript.push(item);
+        seenTexts.add(normalizedText);
+      }
+    }
+  }
+  
+  return deduplicatedTranscript;
 }
 
 // Parse VTT file content and extract transcript items
@@ -897,26 +1022,53 @@ export async function parseCSVContent(csvContent: string): Promise<CSVParsingRes
   }
 }
 
-// Utility for processing batch with concurrency limits
+// Semaphore class for true concurrent control
+class Semaphore {
+  private permits: number;
+  private waitingQueue: (() => void)[] = [];
+
+  constructor(permits: number) {
+    this.permits = permits;
+  }
+
+  async acquire(): Promise<void> {
+    if (this.permits > 0) {
+      this.permits--;
+      return Promise.resolve();
+    }
+
+    return new Promise<void>((resolve) => {
+      this.waitingQueue.push(resolve);
+    });
+  }
+
+  release(): void {
+    this.permits++;
+    if (this.waitingQueue.length > 0) {
+      const resolve = this.waitingQueue.shift()!;
+      this.permits--;
+      resolve();
+    }
+  }
+}
+
+// Improved utility for processing batch with true concurrency control
 export async function processBatchWithConcurrency<T, R>(
   items: T[],
   processFn: (item: T) => Promise<R>,
   concurrency: number = 5
 ): Promise<R[]> {
-  const results: R[] = [];
-  const chunks: T[][] = [];
+  const semaphore = new Semaphore(concurrency);
   
-  // Split items into chunks
-  for (let i = 0; i < items.length; i += concurrency) {
-    chunks.push(items.slice(i, i + concurrency));
-  }
-  
-  // Process each chunk
-  for (const chunk of chunks) {
-    const chunkPromises = chunk.map(item => processFn(item));
-    const chunkResults = await Promise.all(chunkPromises);
-    results.push(...chunkResults);
-  }
-  
-  return results;
+  // Process all items in parallel up to concurrency limit
+  const promises = items.map(async (item) => {
+    await semaphore.acquire();
+    try {
+      return await processFn(item);
+    } finally {
+      semaphore.release();
+    }
+  });
+
+  return Promise.all(promises);
 }

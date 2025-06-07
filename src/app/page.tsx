@@ -36,6 +36,119 @@ import { supabase } from '@/supabase/config';
 // Default formats for subtitle extraction
 const DEFAULT_FORMATS = ["CLEAN_TEXT", "SRT"];
 
+// Simple language name mapping function (client-side version)
+const getLanguageName = (code: string): string => {
+  const languages: { [key: string]: string } = {
+    'en': 'English',
+    'es': 'Spanish',
+    'fr': 'French',
+    'de': 'German',
+    'it': 'Italian',
+    'pt': 'Portuguese',
+    'pt-BR': 'Portuguese (Brazil)',
+    'ru': 'Russian',
+    'ja': 'Japanese',
+    'ko': 'Korean',
+    'zh': 'Chinese',
+    'zh-CN': 'Chinese (Simplified)',
+    'zh-TW': 'Chinese (Traditional)',
+    'ar': 'Arabic',
+    'hi': 'Hindi',
+    'nl': 'Dutch',
+    'pl': 'Polish',
+    'sv': 'Swedish',
+    'da': 'Danish',
+    'no': 'Norwegian',
+    'fi': 'Finnish',
+    'tr': 'Turkish',
+    'el': 'Greek',
+    'he': 'Hebrew',
+    'th': 'Thai',
+    'vi': 'Vietnamese',
+    'id': 'Indonesian',
+    'ms': 'Malay',
+    'uk': 'Ukrainian',
+    'cs': 'Czech',
+    'sk': 'Slovak',
+    'hu': 'Hungarian',
+    'ro': 'Romanian',
+    'bg': 'Bulgarian',
+    'hr': 'Croatian',
+    'sr': 'Serbian',
+    'sl': 'Slovenian',
+    'et': 'Estonian',
+    'lv': 'Latvian',
+    'lt': 'Lithuanian',
+    'mt': 'Maltese',
+    'bn': 'Bengali',
+    'ur': 'Urdu',
+    'fa': 'Persian',
+    'ta': 'Tamil',
+    'te': 'Telugu',
+    'gu': 'Gujarati',
+    'kn': 'Kannada',
+    'ml': 'Malayalam',
+    'mr': 'Marathi',
+    'ne': 'Nepali',
+    'si': 'Sinhala',
+    'af': 'Afrikaans',
+    'sq': 'Albanian',
+    'am': 'Amharic',
+    'hy': 'Armenian',
+    'az': 'Azerbaijani',
+    'eu': 'Basque',
+    'be': 'Belarusian',
+    'bs': 'Bosnian',
+    'ca': 'Catalan',
+    'co': 'Corsican',
+    'cy': 'Welsh',
+    'eo': 'Esperanto',
+    'tl': 'Filipino',
+    'fy': 'Frisian',
+    'gl': 'Galician',
+    'ka': 'Georgian',
+    'ht': 'Haitian Creole',
+    'ha': 'Hausa',
+    'haw': 'Hawaiian',
+    'is': 'Icelandic',
+    'ig': 'Igbo',
+    'ga': 'Irish',
+    'jw': 'Javanese',
+    'kk': 'Kazakh',
+    'km': 'Khmer',
+    'ku': 'Kurdish',
+    'ky': 'Kyrgyz',
+    'lo': 'Lao',
+    'la': 'Latin',
+    'lb': 'Luxembourgish',
+    'mk': 'Macedonian',
+    'mg': 'Malagasy',
+    'mi': 'Maori',
+    'mn': 'Mongolian',
+    'my': 'Myanmar (Burmese)',
+    'ny': 'Chichewa',
+    'ps': 'Pashto',
+    'pa': 'Punjabi',
+    'sm': 'Samoan',
+    'gd': 'Scottish Gaelic',
+    'sn': 'Shona',
+    'sd': 'Sindhi',
+    'so': 'Somali',
+    'st': 'Sesotho',
+    'su': 'Sundanese',
+    'sw': 'Swahili',
+    'tg': 'Tajik',
+    'tt': 'Tatar',
+    'uz': 'Uzbek',
+    'xh': 'Xhosa',
+    'yi': 'Yiddish',
+    'yo': 'Yoruba',
+    'zu': 'Zulu',
+    'auto': 'Auto-detected'
+  };
+  return languages[code] || code;
+};
+
 export default function Home() {
   const [activeTab, setActiveTab] = useState("input");
   const [isProcessing, setIsProcessing] = useState(false);
@@ -463,13 +576,13 @@ export default function Home() {
         }
         
         // Calculate cost
-        let coinCost = payload.coinCostEstimate || 1;
-          // Deduct coins
+        let coinCost = payload.coinCostEstimate || 1;        // Deduct coins
         const deductResult = coinDeductionFunction(coinCost);        if (!deductResult.success) {
           clearInterval(progressInterval);
           toast.error("Insufficient Free Coins: You've used all your free coins. Sign up for more!", {
             duration: 5000
           });
+          setIsProcessing(false);
           setActiveTab("input");
           return;
         }
@@ -503,12 +616,12 @@ export default function Home() {
           userId, 
           payload.coinCostEstimate || 1
         );
-        
-        if (!deductResult.success) {
+          if (!deductResult.success) {
           clearInterval(progressInterval);
           toast.error(deductResult.error || "Insufficient coins for this operation.", {
             duration: 5000
           });
+          setIsProcessing(false);
           setActiveTab("input");
           return;
         }
@@ -543,12 +656,12 @@ export default function Home() {
   
       if (!response.ok) {
         const errorData = await response.json();
-        // console.error("[ERROR] Extract API error:", errorData);
-          // Check if this is an insufficient funds error
+        // console.error("[ERROR] Extract API error:", errorData);        // Check if this is an insufficient funds error
         if (errorData.requireMoreCoins) {
           toast.error("Insufficient Coins: You don't have enough coins for this operation. Please add more coins to your account.", {
             duration: 5000
           });
+          setIsProcessing(false);
           setActiveTab("input");
           return;
         }
@@ -629,20 +742,58 @@ export default function Home() {
         }        // Show success toast
         toast.success(`Processing Complete: ${payload.coinCostEstimate} coins used for subtitle extraction`, {
           duration: 3000
-        });
-      } else {// No subtitles found
-        // console.warn("[WARNING] No subtitles found in the response");
+        });      } else {// No subtitles found - show error but stay in processing tab
+        console.warn("[WARNING] No subtitles found in the response");
         toast.error("No Results: No subtitles were found for the provided video(s).", {
           duration: 5000
         });
-        setActiveTab("input");
-      }
-    } catch (error: any) {
-      // console.error("[ERROR] Process Error:", error);
+        
+        // Create an error result to display instead of redirecting
+        const errorResult = [{
+          id: `no-results-${Date.now()}`,
+          videoTitle: 'No Subtitles Found',
+          language: getLanguageName(selectedLanguage),
+          format: selectedFormats[0] || 'txt',
+          fileSize: '0KB',
+          content: 'No subtitles were found for the provided video(s). This could be because:\n\n• The video creator has disabled captions\n• The video is too new and captions haven\'t been generated yet\n• The video is private or unavailable\n• The playlist contains only videos without captions\n\nPlease try with different videos or check if captions are available on YouTube.',
+          url: payload.url || '',
+          downloadUrl: '',
+          error: 'No subtitles found'
+        }];
+        
+        // Show results tab with error information instead of redirecting to input
+        startTransition(() => {
+          setProgress(100);
+          setHasResults(true);
+          setSubtitles(errorResult);
+          setActiveTab("results");
+        });
+      }    } catch (error: any) {
+      console.error("[ERROR] Process Error:", error);
       toast.error(error.message || "Processing failed", {
         duration: 5000
       });
-      setActiveTab("input");
+      
+      // Create an error result to display instead of redirecting
+      const errorResult = [{
+        id: `processing-error-${Date.now()}`,
+        videoTitle: 'Processing Error',
+        language: getLanguageName(selectedLanguage),
+        format: selectedFormats[0] || 'txt',
+        fileSize: '0KB',
+        content: `An error occurred while processing your request:\n\n${error.message || 'Unknown error'}\n\nPlease try again. If the problem persists:\n• Check that the URL is valid and accessible\n• Ensure the video has captions enabled\n• Try with a single video instead of a playlist\n• Contact support if the issue continues`,
+        url: payload.url || '',
+        downloadUrl: '',
+        error: error.message || 'Processing failed'
+      }];
+      
+      // Show results tab with error information instead of redirecting to input
+      startTransition(() => {
+        setProgress(100);
+        setHasResults(true);
+        setSubtitles(errorResult);
+        setActiveTab("results");
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -688,6 +839,39 @@ export default function Home() {
       OPERATION_COSTS
     });
     
+    // Debug: Check if selectedFormats is empty and why
+    if (selectedFormats.length === 0) {
+      console.warn('⚠️ WARNING: selectedFormats is empty!', {
+        selectedFormats,
+        defaultFormats: DEFAULT_FORMATS,
+        mounted
+      });
+      // If selectedFormats is empty, use default formats for calculation
+      const formatsToUse = DEFAULT_FORMATS;
+      console.log('🔧 Using default formats for calculation:', formatsToUse);
+      
+      // Recalculate with default formats
+      let baseCost = 0;
+      if (isPlaylist) {
+        const roundedVideoCount = Math.max(1, Math.round(videoCount));
+        baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE * formatsToUse.length;
+        console.log(`[COST] Playlist mode (with defaults): ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate × ${formatsToUse.length} formats = ${baseCost}`);
+      } else {
+        if (videoCount > 1) {
+          const roundedVideoCount = Math.max(1, Math.round(videoCount));
+          baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE * formatsToUse.length;
+          console.log(`[COST] Multiple videos (with defaults): ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate × ${formatsToUse.length} formats = ${baseCost}`);
+        } else {
+          baseCost = OPERATION_COSTS.SINGLE_SUBTITLE * formatsToUse.length;
+          console.log(`[COST] Single video (with defaults): ${OPERATION_COSTS.SINGLE_SUBTITLE} single rate × ${formatsToUse.length} formats = ${baseCost}`);
+        }
+      }
+      const roundedBaseCost = Math.round(baseCost * 100) / 100;
+      const total = Math.max(Math.ceil(roundedBaseCost), 1);
+      console.log(`[COST] Final cost calculation (with defaults): ${roundedBaseCost} base = ${total} coins`);
+      return total;
+    }
+    
     // Base calculation
     let baseCost = 0;
     
@@ -720,7 +904,7 @@ export default function Home() {
     console.log(`[COST] Final cost calculation: ${roundedBaseCost} base = ${total} coins`);
     
     return total;
-  }, [videoCount, selectedFormats, isPlaylist]);
+  }, [videoCount, selectedFormats, isPlaylist, mounted]);
   // Effect to check user coin balance
   useEffect(() => {    // Don't update coin balance during processing transitions to prevent interference
     if (isProcessingTransition) {
