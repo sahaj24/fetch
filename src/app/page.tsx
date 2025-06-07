@@ -463,8 +463,7 @@ export default function Home() {
         
         // Calculate cost
         let coinCost = payload.coinCostEstimate || 1;
-        
-        // Deduct coins
+          // Deduct coins
         const deductResult = coinDeductionFunction(coinCost);        if (!deductResult.success) {
           clearInterval(progressInterval);
           toast.error("Insufficient Free Coins: You've used all your free coins. Sign up for more!", {
@@ -475,6 +474,15 @@ export default function Home() {
         }
         
         console.log(`Anonymous coins deducted: ${coinCost}. Remaining: ${deductResult.remainingCoins}`);
+        
+        // Immediately refresh anonymous coin display after deduction
+        if (typeof window !== 'undefined') {
+          const coinUpdateEvent = new CustomEvent('anonymousCoinChange', { 
+            detail: { balance: deductResult.remainingCoins } 
+          });
+          window.dispatchEvent(coinUpdateEvent);
+          console.log('🔄 Anonymous coin balance updated in UI after deduction');
+        }
       }
         console.log(`[INFO] Processing request for user ${userId} with payload:`, {
         inputType: payload.inputType,
@@ -579,11 +587,34 @@ export default function Home() {
         setTimeout(() => {
           saveState();
         }, 10);
-        
-        // Re-enable coin balance updates after state transition is complete
+          // Re-enable coin balance updates after state transition is complete
         setTimeout(() => {
           console.log('✅ Re-enabling coin balance updates after processing transition');
           setIsProcessingTransition(false);
+            // Refresh coin balance after processing completion to show updated balance
+          console.log('🔄 Refreshing coin balance after successful task completion');
+          if (isAnonymousUser) {
+            // For anonymous users, dispatch event to refresh UI
+            if (typeof window !== 'undefined') {
+              const coinRefreshEvent = new CustomEvent('anonymousCoinRefresh');
+              window.dispatchEvent(coinRefreshEvent);
+              console.log('✅ Anonymous coin refresh event dispatched');
+            }
+          } else {
+            // For logged-in users, refresh from the global store
+            const refreshUserCoins = async () => {
+              try {
+                // Import the store first, then access refreshCoins through the store instance
+                const { useCoinStore } = await import('@/app/coins/hooks');
+                const store = useCoinStore.getState();
+                await store.refreshCoins();
+                console.log('✅ User coin balance refreshed after task completion');
+              } catch (error) {
+                console.error('❌ Error refreshing user coins after task completion:', error);
+              }
+            };
+            refreshUserCoins();
+          }
         }, 500); // Wait longer to ensure tab state is fully committed
         
         // Also force save directly to localStorage as backup

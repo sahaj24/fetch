@@ -71,7 +71,6 @@ export function QuietCoinBalance() {
   useEffect(() => {
     setMounted(true);
   }, []);
-
   // Initialize and listen for changes to anonymous coins
   useEffect(() => {
     if (!mounted) return; // Don't access localStorage until mounted
@@ -81,19 +80,29 @@ export function QuietCoinBalance() {
       // Initialize anonymous balance
       setAnonymousBalance(getAnonymousCoins());
 
-      // Listen for coin change events
+      // Listen for coin change events (when specific balance is provided)
       const handleCoinChange = (event: any) => {
         if (event.detail && typeof event.detail.balance === 'number') {
           setAnonymousBalance(event.detail.balance);
+          console.log('📊 Anonymous coin balance updated from event:', event.detail.balance);
         }
       };
+      
+      // Listen for coin refresh events (when we need to read from localStorage)
+      const handleCoinRefresh = () => {
+        const currentCoins = getAnonymousCoins();
+        setAnonymousBalance(currentCoins);
+        console.log('🔄 Anonymous coin balance refreshed from localStorage:', currentCoins);
+      };
 
-      // Add event listener
+      // Add event listeners
       window.addEventListener('anonymousCoinChange', handleCoinChange);
+      window.addEventListener('anonymousCoinRefresh', handleCoinRefresh);
 
       // Clean up
       return () => {
         window.removeEventListener('anonymousCoinChange', handleCoinChange);
+        window.removeEventListener('anonymousCoinRefresh', handleCoinRefresh);
       };
     }
   }, [isLoggedIn, mounted]);
