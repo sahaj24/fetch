@@ -471,13 +471,41 @@ export default function Home() {
         
         console.log(`Anonymous coins deducted: ${coinCost}. Remaining: ${deductResult.remainingCoins}`);
       }
-      
-      console.log(`[INFO] Processing request for user ${userId} with payload:`, {
+        console.log(`[INFO] Processing request for user ${userId} with payload:`, {
         inputType: payload.inputType,
         formats: payload.formats,
         videoCount: payload.videoCount,
         coinCost: payload.coinCostEstimate
       });
+      
+      // For logged-in users, deduct coins before making the API call
+      if (!isAnonymousUser && userId) {
+        console.log(`[INFO] Deducting ${payload.coinCostEstimate} coins for logged-in user ${userId}`);
+        
+        // Import the coin deduction function
+        const { directCoinDeduction } = await import('@/app/coins/utils');
+        
+        // Deduct coins from Supabase
+        const deductResult = await directCoinDeduction(
+          userId, 
+          payload.coinCostEstimate || 1, 
+          `Subtitle extraction: ${payload.videoCount || 1} video(s), ${payload.formats?.length || 1} format(s)`
+        );
+        
+        if (!deductResult.success) {
+          clearInterval(progressInterval);
+          toast.error(deductResult.error || "Insufficient coins for this operation.", {
+            duration: 5000
+          });
+          setActiveTab("input");
+          return;
+        }
+        
+        console.log(`[SUCCESS] Coins deducted successfully. Remaining balance: ${deductResult.remainingBalance}`);
+        
+        // Update the UI with the new balance immediately
+        setUserCoinBalance(deductResult.remainingBalance);
+      }
       
       // Make API request to extract subtitles
       const response = await fetch("/api/youtube/extract", {
@@ -492,7 +520,9 @@ export default function Home() {
         body: JSON.stringify({
           ...payload,
           // Add anonymous ID if needed
-          ...(isAnonymousUser ? { anonymousId } : {})
+          ...(isAnonymousUser ? { anonymousId } : {}),
+          // Add flag to skip coin deduction in API since we already did it
+          ...(userId ? { "skipCoinDeduction": true } : {})
         }),
       });
   
@@ -561,43 +591,7 @@ export default function Home() {
           console.log('💾 Backup state saved directly to localStorage');
         } catch (error) {
           console.error('❌ Backup state save failed:', error);
-        }
-          // FIX: Fetch updated balance for logged-in users without interfering with UI state
-        // Move this logic to run asynchronously without affecting the results display
-        if (userId) {
-          // Use setTimeout to ensure this runs after the UI state has been fully committed
-          setTimeout(async () => {
-            try {
-              const supabase = createClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-              );
-              
-              // Fetch the updated balance after deduction with error handling
-              const { data: updatedData, error: balanceError } = await supabase
-                .from('user_coins')
-                .select('balance')
-                .eq('user_id', userId)
-                .single();
-                
-              if (!balanceError && updatedData) {
-                // Update UI with new balance, but ensure we don't trigger any side effects
-                // that might affect the active tab state
-                setUserCoinBalance(updatedData.balance || 0);
-              } else if (balanceError?.code === 'PGRST116') {
-                // User has no coin record, set balance to 0 and don't log error
-                setUserCoinBalance(0);
-              }
-            } catch (error) {
-              // Silently handle balance fetch errors to avoid disrupting the user experience
-              console.warn("[WARNING] Error fetching updated balance:", error);
-              // Set balance to 0 as fallback
-              setUserCoinBalance(0);
-            }
-          }, 100); // Small delay to ensure UI state is committed
-        }
-        
-        // Show success toast
+        }        // Show success toast
         toast.success(`Processing Complete: ${payload.coinCostEstimate} coins used for subtitle extraction`, {
           duration: 3000
         });
