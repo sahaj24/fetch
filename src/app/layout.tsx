@@ -14,6 +14,9 @@ export const metadata: Metadata = {
   title: "FetchSub - YouTube Subtitle Downloader",
   description:
     "Batch download subtitles from YouTube videos by providing playlist URLs, channel URLs, or uploading CSV files.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({

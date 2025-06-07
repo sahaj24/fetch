@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, startTransition } from "react";
+import Image from "next/image";
 import {
   Card,
   CardContent,
@@ -970,11 +971,16 @@ export default function Home() {
   return (
     <main className="min-h-screen py-8 px-4 sm:px-6 bg-gradient-to-b from-white to-gray-50">
       <div className="container max-w-5xl mx-auto space-y-8">
-        {/* Hero Section */}
-        <div className="text-center space-y-4 staggered-fade-in py-8">
+        {/* Hero Section */}        <div className="text-center space-y-4 staggered-fade-in py-8">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="h-12 w-12 bg-black rounded-full flex items-center justify-center shadow-lg">
-              <Headphones className="h-6 w-6 text-white" />
+              <Image 
+                src="/logo.svg" 
+                alt="FetchSub Logo" 
+                width={24} 
+                height={24}
+                className="text-white"
+              />
             </div>
             <h1 className="text-3xl font-bold tracking-tight">FetchSub</h1>
           </div>

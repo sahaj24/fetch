@@ -1,0 +1,17 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background rounded rectangle -->
+  <rect x="8" y="8" width="112" height="112" rx="24" fill="#000000"/>
+  
+  <!-- Inner white area -->
+  <rect x="16" y="16" width="96" height="96" rx="16" fill="#ffffff"/>
+  
+  <!-- Video player container -->
+  <rect x="28" y="28" width="48" height="36" rx="8" fill="#000000"/>
+  
+  <!-- Play triangle -->
+  <polygon points="40,36 40,56 60,46" fill="#ffffff"/>
+  
+  <!-- Text lines representing subtitles/content -->
+  <rect x="28" y="72" width="72" height="8" rx="4" fill="#000000"/>
+  <rect x="28" y="88" width="60" height="8" rx="4" fill="#000000"/>
+</svg>

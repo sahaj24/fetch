@@ -1,16 +1,23 @@
 import React from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 const SiteFooter = () => {
   const currentYear = new Date().getFullYear();
 
   return (
     <footer className="border-t bg-background">
-      <div className="container py-8 md:py-12">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <div className="container py-8 md:py-12">        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div className="md:col-span-2">
-            <Link href="/" className="text-xl font-bold">
-              FetchSub
+            <Link href="/" className="flex items-center space-x-2">
+              <Image 
+                src="/logo.svg" 
+                alt="FetchSub Logo" 
+                width={24} 
+                height={24}
+                className="text-primary"
+              />
+              <span className="text-xl font-bold">FetchSub</span>
             </Link>
             <p className="mt-2 text-sm text-muted-foreground max-w-md">
               A streamlined web application that allows users to batch download
