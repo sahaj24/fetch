@@ -169,34 +169,77 @@ async function extractSubtitles(url: string, format: string, language: string): 
       isPlaylistOrChannel: true,
       downloadUrl: ``
     };  } else {
-    // This is a single video URL - check negative cache first to avoid repeated failures
+    // This is a single video URL - get video info first
+    actualVideoId = videoId;
+    videoInfo = await getVideoInfo(videoId);
+    if (!videoInfo) {
+      return {
+        id: `error-${videoId}-${format}-${language}`,
+        videoTitle: `YouTube Video ${videoId}`,
+        language: getLanguageName(language),
+        format,
+        fileSize: '0KB',
+        content: `Failed to fetch video information for this video.`,
+        url,
+        downloadUrl: '',
+        error: `Failed to fetch video information`,
+        notice: 'Video info unavailable'
+      };
+    }
+    
+    // Now check negative cache after we have video info
     const cacheKey = `${videoId}-${language}`;
     const now = Date.now();
     
-    // Check negative cache first
+  // Check negative cache first
     if (negativeCache[cacheKey] && 
         (now - negativeCache[cacheKey].timestamp) < NEGATIVE_CACHE_EXPIRY_MS) {
       const cachedFailure = negativeCache[cacheKey];
       if (cachedFailure.reason === 'SUBTITLES_DISABLED') {
-        throw new Error(`Creator has disabled subtitles for this video (cached result)`);
+        // Return graceful error result instead of throwing
+        return {
+          id: `cached-subtitles-disabled-${actualVideoId}-${format}-${language}`,
+          videoTitle: videoInfo.title,
+          language: getLanguageName(language),
+          format,
+          fileSize: '0KB',
+          content: `Subtitles are not available for this video. The creator has disabled captions.`,
+          url,
+          downloadUrl: '',
+          error: `Creator has disabled subtitles for this video`,
+          notice: 'Subtitles disabled by creator'
+        };
       } else if (cachedFailure.reason === 'UNAVAILABLE') {
-        throw new Error(`This video is private or unavailable and cannot be processed (cached result)`);
+        // Return graceful error result instead of throwing
+        return {
+          id: `cached-unavailable-${actualVideoId}-${format}-${language}`,
+          videoTitle: videoInfo.title,
+          language: getLanguageName(language),
+          format,
+          fileSize: '0KB',
+          content: `This video is private or unavailable and cannot be processed.`,
+          url,
+          downloadUrl: '',
+          error: `This video is private or unavailable and cannot be processed`,
+          notice: 'Video unavailable'
+        };
       } else if (cachedFailure.reason === 'PRIVATE') {
-        throw new Error(`This video is private and cannot be accessed (cached result)`);
-      }
-    }
+        // Return graceful error result instead of throwing
+        return {
+          id: `cached-private-${actualVideoId}-${format}-${language}`,
+          videoTitle: videoInfo.title,
+          language: getLanguageName(language),
+          format,
+          fileSize: '0KB',
+          content: `This video is private and cannot be accessed.`,
+          url,
+          downloadUrl: '',
+          error: `This video is private and cannot be accessed`,
+          notice: 'Video private'
+        };
+      }    }
     
-    // Check if we have this transcript in cache and it's not expired
-    if (transcriptCache[cacheKey] && 
-        (now - transcriptCache[cacheKey].timestamp) < CACHE_EXPIRY_MS) {
-      videoInfo = transcriptCache[cacheKey].videoInfo;
-    } else {
-      // Not in cache, fetch video info
-      videoInfo = await getVideoInfo(videoId);
-      if (!videoInfo) {
-        throw new Error("Failed to fetch video information");
-      }
-    }
+    // For single videos, we already have videoInfo, so no need to fetch again
   }
 
   try {

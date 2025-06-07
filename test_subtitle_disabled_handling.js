@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const baseUrl = 'http://localhost:3001';
+const baseUrl = 'http://localhost:3003';
 
 async function testSubtitleDisabledHandling() {
     console.log('🧪 Testing Subtitle Disabled Error Handling');
@@ -54,12 +54,12 @@ async function testSubtitleDisabledHandling() {
                 console.log(`   ⚠️  Authentication Error: ${data.error}`);
                 console.log(`   ℹ️  This is expected - we're testing without proper auth`);
                 console.log(`   ✅ API returned JSON error response (not HTML)`);
-            } else if (data.results && Array.isArray(data.results)) {
-                console.log(`   📝 Results Count: ${data.results.length}`);
+            } else if (data.subtitles && Array.isArray(data.subtitles)) {
+                console.log(`   📝 Results Count: ${data.subtitles.length}`);
                 
                 // Check if any results have the expected error handling
-                const errorResults = data.results.filter(r => r.error);
-                const subtitleDisabledResults = data.results.filter(r => 
+                const errorResults = data.subtitles.filter(r => r.error);
+                const subtitleDisabledResults = data.subtitles.filter(r => 
                     r.notice === 'Subtitles disabled by creator' || 
                     r.error?.includes('disabled subtitles')
                 );
@@ -71,9 +71,13 @@ async function testSubtitleDisabledHandling() {
                     console.log(`\n✅ SUCCESS: Subtitle disabled error handled gracefully!`);
                     console.log(`   📝 Error Message: ${subtitleDisabledResults[0].error}`);
                     console.log(`   🏷️  Notice: ${subtitleDisabledResults[0].notice}`);
+                    console.log(`   📄 Content: ${subtitleDisabledResults[0].content}`);
+                    console.log(`   🎬 Video Title: ${subtitleDisabledResults[0].videoTitle}`);
                 } else if (errorResults.length > 0) {
                     console.log(`\n⚠️  General Error Result:`);
                     console.log(`   📝 Error: ${errorResults[0].error}`);
+                } else {
+                    console.log(`\n⚠️  No error results found - this might indicate the fix isn't working`);
                 }
             } else {
                 console.log(`   📝 Unexpected Response Format`);
