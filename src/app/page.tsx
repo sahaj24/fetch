@@ -28,7 +28,7 @@ import { Toaster } from "sonner";
 import { toast } from "sonner";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import Link from "next/link";
-import { getUserCoins, OPERATION_COSTS } from "@/app/coins/utils";
+import { OPERATION_COSTS, getUserCoins } from "@/app/coins/utils";
 import { createClient } from '@supabase/supabase-js';
 import { supabase } from '@/supabase/config';
 
@@ -477,19 +477,17 @@ export default function Home() {
         videoCount: payload.videoCount,
         coinCost: payload.coinCostEstimate
       });
-      
-      // For logged-in users, deduct coins before making the API call
+        // For logged-in users, deduct coins before making the API call
       if (!isAnonymousUser && userId) {
         console.log(`[INFO] Deducting ${payload.coinCostEstimate} coins for logged-in user ${userId}`);
         
-        // Import the coin deduction function
-        const { directCoinDeduction } = await import('@/app/coins/utils');
+        // Use the simple coin deduction function
+        const { deductUserCoins } = await import('@/app/coins/simple-deduction');
         
         // Deduct coins from Supabase
-        const deductResult = await directCoinDeduction(
+        const deductResult = await deductUserCoins(
           userId, 
-          payload.coinCostEstimate || 1, 
-          `Subtitle extraction: ${payload.videoCount || 1} video(s), ${payload.formats?.length || 1} format(s)`
+          payload.coinCostEstimate || 1
         );
         
         if (!deductResult.success) {

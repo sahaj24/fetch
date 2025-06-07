@@ -658,8 +658,7 @@ export async function directCoinDeduction(
       error: 'No user ID provided'
     };
   }
-  
-  console.log(`SUPABASE LOG: Direct coin deduction attempt for user ${userId}: ${amount} coins for ${description}`);
+    console.log(`SUPABASE LOG: Direct coin deduction attempt for user ${userId}: ${amount} coins for ${description}`);
   
   try {
     // Get the user's current coins
@@ -684,44 +683,34 @@ export async function directCoinDeduction(
       };
     }
     
-    // Create a new transaction
-    const transaction = {
-      id: generateId(),
-      type: 'SPENT' as const,
-      amount,
-      description,
-      timestamp: serverTimestamp()
-    };
-    
-    console.log("SUPABASE LOG: Attempting to update coin balance", {
+    console.log("SUPABASE LOG: Attempting to deduct coins directly", {
       userId,
       currentBalance: userCoins.balance,
       amountToSpend: amount,
-      newBalance: userCoins.balance - amount,
-      transaction
+      newBalance: userCoins.balance - amount
     });
     
-    // Update the user's coins with a transaction
-    const { error } = await supabase.rpc('spend_coins', {
-      user_id: userId,
-      amount_to_spend: amount,
-      transaction_data: transaction
-    });
+    // Directly update the user's coin balance (simplified approach)
+    const newBalance = userCoins.balance - amount;
+    const { error: updateError } = await supabase
+      .from('user_coins')
+      .update({ 
+        balance: newBalance,
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', userId);
     
-    if (error) {
-      throw error;
+    if (updateError) {
+      console.error("SUPABASE ERROR: Failed to update coin balance:", updateError);
+      throw updateError;
     }
     
-    console.log(`SUPABASE LOG: Successfully deducted ${amount} coins from user ${userId}`);
-    
-    // Get the updated balance
-    const updatedCoins = await getCoinsForUser(userId);
-    const remainingBalance = updatedCoins?.balance || (userCoins.balance - amount);
+    console.log(`SUPABASE LOG: Successfully deducted ${amount} coins from user ${userId}. New balance: ${newBalance}`);
     
     return { 
       success: true, 
-      remainingBalance,
-      currentBalance: remainingBalance
+      remainingBalance: newBalance,
+      currentBalance: newBalance
     };
   } catch (error) {
     console.error("SUPABASE ERROR: Failed to deduct coins:", error);
