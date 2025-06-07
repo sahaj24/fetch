@@ -1045,9 +1045,16 @@ export async function POST(req: NextRequest) {
             }
             
             console.log(`✅ Successfully deducted ${cost} coins from user ${userId}`);
-          }
-        } catch (deductError) {
+          }        } catch (deductError) {
             console.error(`Error in coin handling for user ${userId}:`, deductError);
+            // Return error response - don't continue processing if coin deduction fails
+            return NextResponse.json(
+              { 
+                error: "Failed to process coin deduction. Please try again.",
+                details: deductError instanceof Error ? deductError.message : 'Unknown error'
+              },
+              { status: 500 }
+            );
           }
       } else {
         console.warn(`Not deducting coins because userId=${userId} or processedVideos=${processingStats.processedVideos}`);
@@ -1115,9 +1122,16 @@ export async function POST(req: NextRequest) {
                 { error: "Insufficient coins for this operation" },
                 { status: 402 }
               );
-            }
-          } catch (deductError) {
+            }          } catch (deductError) {
             console.error(`Error in direct coin deduction for user ${userId}:`, deductError);
+            // Return error response - don't continue processing if coin deduction fails
+            return NextResponse.json(
+              { 
+                error: "Failed to process coin deduction for CSV processing. Please try again.",
+                details: deductError instanceof Error ? deductError.message : 'Unknown error'
+              },
+              { status: 500 }
+            );
           }
         } else {
           console.warn(`Not deducting coins because userId=${userId} or processedVideos=${processingStats.processedVideos}`);
