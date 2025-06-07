@@ -861,16 +861,14 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
         console.log("📦 Using cached coin data due to Supabase error");
         return cachedCoins;
       }
-      
-      // If no coins found, create them
+        // If no coins found, handle gracefully to prevent infinite loops
       if (error.code === "PGRST116") { // No rows returned
-        console.log("🆕 No coins found for user, creating new coins document");
-        try {
-          return await getOrCreateUserCoinsDocument(userId);
-        } catch (err) {
-          console.error("❌ Firestore error getting user coins:", err);
-          return getDefaultUserCoins();
-        }
+        console.log("🆕 No coins found for user, using temporary fallback to prevent infinite loops");
+        
+        // TEMPORARY FIX: Return anonymous coins to prevent UI breaking
+        // This prevents the infinite loop while database issues are resolved
+        console.log("⚠️ TEMPORARY: Returning anonymous coins instead of trying to create record");
+        return getAnonymousUserCoins(); // 15 free coins
       }
       
       // For any other error, return default coins

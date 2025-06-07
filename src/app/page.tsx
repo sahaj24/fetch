@@ -55,10 +55,14 @@ export default function Home() {
   const [coinCostEstimate, setCoinCostEstimate] = useState(0);
   const [videoCount, setVideoCount] = useState(1);
   const [isPlaylist, setIsPlaylist] = useState(false);
-    // For coin balance checks
-  const [userCoinBalance, setUserCoinBalance] = useState<number | null>(null);
+    // For coin balance tracking
+  const [userCoinBalance, setUserCoinBalance] = useState<number>(0);
   const [isLoadingCoins, setIsLoadingCoins] = useState(false);
   const [hasInsufficientCoins, setHasInsufficientCoins] = useState(false);
+  
+  // Flag to prevent coin balance updates during critical state transitions
+  const [isProcessingTransition, setIsProcessingTransition] = useState(false);
+  
   // For tracking current input data from InputSection
   const [currentInputData, setCurrentInputData] = useState<{
     inputType: "url" | "file";
@@ -522,8 +526,12 @@ export default function Home() {
       setProcessedVideos(
         Math.ceil(extractedSubtitles.length / selectedFormats.length) || payload.videoCount || 0,
       );      // Only proceed if we have actual results
-      if (extractedSubtitles && extractedSubtitles.length > 0) {
-        console.log('🎉 Processing complete with results, updating state...');
+      if (extractedSubtitles && extractedSubtitles.length > 0) {        console.log('🎉 Processing complete with results, updating state...');
+        
+        // Prevent coin balance updates during this critical state transition
+        console.log('🚫 Setting processing transition flag to prevent coin balance interference');
+        setIsProcessingTransition(true);
+        
           // Use startTransition to batch all state updates together
         // This ensures hasResults and subtitles are set before activeTab changes
         startTransition(() => {
@@ -533,12 +541,17 @@ export default function Home() {
           setSubtitles(extractedSubtitles);
           setActiveTab("results");
         });
-        
-        // Save state immediately after setting results
+          // Save state immediately after setting results
         console.log('💾 Saving state after successful processing');
         setTimeout(() => {
           saveState();
         }, 10);
+        
+        // Re-enable coin balance updates after state transition is complete
+        setTimeout(() => {
+          console.log('✅ Re-enabling coin balance updates after processing transition');
+          setIsProcessingTransition(false);
+        }, 500); // Wait longer to ensure tab state is fully committed
         
         // Also force save directly to localStorage as backup
         try {
@@ -549,8 +562,7 @@ export default function Home() {
         } catch (error) {
           console.error('❌ Backup state save failed:', error);
         }
-        
-        // FIX: Fetch updated balance for logged-in users without interfering with UI state
+          // FIX: Fetch updated balance for logged-in users without interfering with UI state
         // Move this logic to run asynchronously without affecting the results display
         if (userId) {
           // Use setTimeout to ensure this runs after the UI state has been fully committed
@@ -561,10 +573,10 @@ export default function Home() {
                 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
               );
               
-              // Fetch the updated balance after deduction
+              // Fetch the updated balance after deduction with error handling
               const { data: updatedData, error: balanceError } = await supabase
                 .from('user_coins')
-                .select('*')
+                .select('balance')
                 .eq('user_id', userId)
                 .single();
                 
@@ -572,10 +584,15 @@ export default function Home() {
                 // Update UI with new balance, but ensure we don't trigger any side effects
                 // that might affect the active tab state
                 setUserCoinBalance(updatedData.balance || 0);
+              } else if (balanceError?.code === 'PGRST116') {
+                // User has no coin record, set balance to 0 and don't log error
+                setUserCoinBalance(0);
               }
             } catch (error) {
               // Silently handle balance fetch errors to avoid disrupting the user experience
               console.warn("[WARNING] Error fetching updated balance:", error);
+              // Set balance to 0 as fallback
+              setUserCoinBalance(0);
             }
           }, 100); // Small delay to ensure UI state is committed
         }
@@ -663,9 +680,13 @@ export default function Home() {
     
     return total;
   }, [videoCount, selectedFormats, isPlaylist]);
-
   // Effect to check user coin balance
-  useEffect(() => {
+  useEffect(() => {    // Don't update coin balance during processing transitions to prevent interference
+    if (isProcessingTransition) {
+      console.log('🚫 Skipping coin balance update during processing transition to prevent tab state interference');
+      return;
+    }
+
     const fetchUserCoins = async () => {
       setIsLoadingCoins(true);
       try {
@@ -703,7 +724,7 @@ export default function Home() {
     };
 
     fetchUserCoins();
-  }, [videoCount, selectedFormats.length, calculateCoinCost]);
+  }, [videoCount, selectedFormats.length, calculateCoinCost, isProcessingTransition]);
 
   // Effect to update coin estimation when inputs change
   useEffect(() => {
