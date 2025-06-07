@@ -524,8 +524,7 @@ export default function Home() {
       );      // Only proceed if we have actual results
       if (extractedSubtitles && extractedSubtitles.length > 0) {
         console.log('🎉 Processing complete with results, updating state...');
-        
-        // Use startTransition to batch all state updates together
+          // Use startTransition to batch all state updates together
         // This ensures hasResults and subtitles are set before activeTab changes
         startTransition(() => {
           // Set results first to ensure they're available before tab switch
@@ -551,42 +550,40 @@ export default function Home() {
           console.error('❌ Backup state save failed:', error);
         }
         
-        // FIX: Remove redundant coin deduction since the extraction API already handles this
-        // This was causing a double deduction - once in the API and once here
-        try {
-          // console.log(`[INFO] Coin deduction was handled by the extraction API. Amount: ${payload.coinCostEstimate} coins`);
-          
-          // Instead of deducting coins again, just fetch the updated balance
-          const supabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-          );
-          
-          // Fetch the updated balance after deduction
-          const { data: updatedData, error: balanceError } = await supabase
-            .from('user_coins')
-            .select('*')
-            .eq('user_id', userId)
-            .single();
-            
-          if (balanceError) {
-            // console.warn("[WARNING] Could not fetch updated balance:", balanceError);
-          } else {
-            // console.log(`[SUCCESS] Current balance: ${updatedData?.balance || 'unknown'}`);
-            // Update UI with new balance
-            setUserCoinBalance(updatedData?.balance || 0);
-          }
-            toast.success(`Processing Complete: ${payload.coinCostEstimate} coins used for subtitle extraction`, {
-            duration: 3000
-          });
-        } catch (error) {
-          // console.error("[ERROR] Error fetching updated balance:", error);
-          // Even if balance fetch fails, we already showed results
-          toast.success("Results Ready", {
-            description: "Subtitle extraction complete.",
-            duration: 3000,
-          });
+        // FIX: Fetch updated balance for logged-in users without interfering with UI state
+        // Move this logic to run asynchronously without affecting the results display
+        if (userId) {
+          // Use setTimeout to ensure this runs after the UI state has been fully committed
+          setTimeout(async () => {
+            try {
+              const supabase = createClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+              );
+              
+              // Fetch the updated balance after deduction
+              const { data: updatedData, error: balanceError } = await supabase
+                .from('user_coins')
+                .select('*')
+                .eq('user_id', userId)
+                .single();
+                
+              if (!balanceError && updatedData) {
+                // Update UI with new balance, but ensure we don't trigger any side effects
+                // that might affect the active tab state
+                setUserCoinBalance(updatedData.balance || 0);
+              }
+            } catch (error) {
+              // Silently handle balance fetch errors to avoid disrupting the user experience
+              console.warn("[WARNING] Error fetching updated balance:", error);
+            }
+          }, 100); // Small delay to ensure UI state is committed
         }
+        
+        // Show success toast
+        toast.success(`Processing Complete: ${payload.coinCostEstimate} coins used for subtitle extraction`, {
+          duration: 3000
+        });
       } else {// No subtitles found
         // console.warn("[WARNING] No subtitles found in the response");
         toast.error("No Results: No subtitles were found for the provided video(s).", {
