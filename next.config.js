@@ -18,6 +18,35 @@ const nextConfig = {
     // Image domains
     images: {
         domains: ['images.unsplash.com'],
+    },
+    // Production environment optimizations
+    serverExternalPackages: ['puppeteer', 'playwright'],
+    // Ensure API routes are properly handled in production
+    async rewrites() {
+        return [
+            {
+                source: '/api/:path*',
+                destination: '/api/:path*'
+            }
+        ];
+    },
+    // Add headers to ensure API routes return JSON
+    async headers() {
+        return [
+            {
+                source: '/api/:path*',
+                headers: [
+                    {
+                        key: 'Content-Type',
+                        value: 'application/json'
+                    },
+                    {
+                        key: 'X-API-Handler',
+                        value: 'nextjs'
+                    }
+                ]
+            }
+        ];
     }
 };
 

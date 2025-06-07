@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validateApiRoute, createApiResponse, createApiErrorResponse, logApiRequest } from "@/lib/apiUtils";
 
 // Tell Next.js this route is dynamic and shouldn't be statically optimized
 export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import JSZip from 'jszip';
 
 // These are the exact subtitle examples that will be displayed in the UI
@@ -194,6 +197,17 @@ function getSubtitleContent(format: string): string {
 }
 
 export async function GET(req: NextRequest) {
+  // Log the request for production debugging
+  logApiRequest(req, 'YouTube Download GET');
+  
+  // Validate this is actually an API route
+  if (!validateApiRoute(req)) {
+    return NextResponse.json(
+      { error: 'Invalid API route', url: req.url },
+      { status: 404, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
   try {
     // Extract query parameters
     const { searchParams } = new URL(req.url);
@@ -305,12 +319,8 @@ export async function GET(req: NextRequest) {
         "Content-Disposition": `attachment; filename="${filename}"`,
         "Cache-Control": "no-cache"
       },
-    });
-  } catch (error: any) {
+    });  } catch (error: any) {
     console.error("Error downloading subtitles:", error);
-    return NextResponse.json(
-      { error: error.message || "Failed to download subtitles" },
-      { status: 500 }
-    );
+    return createApiErrorResponse(error, 500, 'YouTube Download');
   }
 }

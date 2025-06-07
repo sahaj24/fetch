@@ -18,6 +18,44 @@ import {
 import { OPERATION_COSTS } from "@/app/coins/utils";
 import { supabase } from "@/supabase/config";
 import { deductCoinsForOperation } from "@/utils/coinUtils";
+import { validateApiRoute, createApiResponse, createApiErrorResponse, logApiRequest } from "@/lib/apiUtils";
+
+// PRODUCTION DEBUGGING: Add explicit route checking
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+// Production environment check
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Function to log production debugging info
+function logProductionDebug(message: string, data?: any) {
+  if (isProduction) {
+    console.log(`[PRODUCTION DEBUG] ${message}`, data ? JSON.stringify(data) : '');
+  }
+}
+
+// Enhanced error handler for production
+function handleProductionError(error: any, context: string): NextResponse {
+  logProductionDebug(`Error in ${context}:`, {
+    message: error.message,
+    stack: error.stack,
+    name: error.name
+  });
+  
+  // Always return JSON, never HTML
+  return NextResponse.json({
+    error: error.message || 'Internal server error',
+    context,
+    production: isProduction,
+    timestamp: new Date().toISOString()
+  }, { 
+    status: 500,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Route': 'youtube-extract'
+    }
+  });
+}
 
 // Create a simple in-memory cache for transcripts to avoid redundant fetching
 type TranscriptCache = {
@@ -945,9 +983,29 @@ async function streamResponse(data: any) {
 
 // Main API handler
 export async function POST(req: NextRequest) {
+  // Log the request for production debugging
+  logApiRequest(req, 'YouTube Extract POST');
+  
+  // Validate this is actually an API route
+  if (!validateApiRoute(req)) {
+    return NextResponse.json(
+      { error: 'Invalid API route', url: req.url },
+      { status: 404, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  // Production debugging
+  logProductionDebug('POST request received', {
+    url: req.url,
+    method: req.method,
+    headers: Object.fromEntries(req.headers.entries())
+  });
+
   try {
     const body = await req.json();
     const { inputType, url, csvContent, formats, language } = body;
+    
+    logProductionDebug('Request body parsed', { inputType, url: url ? 'present' : 'missing', formats, language });
     
     // Get the auth token from the request header
     const authToken = req.headers.get('authorization')?.split('Bearer ')[1];
@@ -1187,19 +1245,31 @@ export async function POST(req: NextRequest) {
         subtitles, 
         stats: processingStats,
         processingTime: `${processingTime}ms` 
-      }, { status: 200 });
-    }
+      }, { status: 200 });    }
   } catch (error: any) {
-    console.error("Error extracting subtitles:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Unknown error' },
-      { status: 500 },
-    );
+    logProductionDebug("Error extracting subtitles:", error);
+    return handleProductionError(error, 'POST /api/youtube/extract');
   }
 }
 
 // Update the handler function to better handle the transcripts
 export async function GET(request: NextRequest) {
+  // Log the request for production debugging
+  logApiRequest(request, 'YouTube Extract GET');
+  
+  // Validate this is actually an API route
+  if (!validateApiRoute(request)) {
+    return NextResponse.json(
+      { error: 'Invalid API route', url: request.url },
+      { status: 404, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
+
+  logProductionDebug('GET request received', {
+    url: request.url,
+    method: request.method
+  });
+
   try {
     // Get URL and format parameters
     const searchParams = request.nextUrl.searchParams;
@@ -1280,11 +1350,10 @@ export async function GET(request: NextRequest) {
         downloadUrl: `${request.nextUrl.origin}/api/youtube/download?url=${encodeURIComponent(url)}&format=${format}&lang=${language}`,
         isGenerated: true,
         error: transcriptError.message
-      });
-    }
+      });    }
   } catch (error: any) {
-    console.error(`Error in route handler: ${error.message}`);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    logProductionDebug(`Error in GET route handler: ${error.message}`);
+    return handleProductionError(error, 'GET /api/youtube/extract');
   }
 }
 
