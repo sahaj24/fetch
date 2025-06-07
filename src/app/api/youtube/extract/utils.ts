@@ -97,7 +97,7 @@ export async function getVideoInfo(videoId: string): Promise<{ title: string; du
   // Method 1: Direct HTTP request to YouTube's oEmbed API (most reliable)
   try {
     const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-    const response = await axios.get(oembedUrl, { timeout: 30000 });
+    const response = await axios.get(oembedUrl);
     
     if (response.data && response.data.title) {
       return {
@@ -127,7 +127,7 @@ export async function getVideoInfo(videoId: string): Promise<{ title: string; du
   try {
     // Use a public no-auth required endpoint that gives basic video info
     const metadataUrl = `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`;
-    const metaResponse = await axios.get(metadataUrl, { timeout: 30000 });
+    const metaResponse = await axios.get(metadataUrl);
     
     if (metaResponse.data && metaResponse.data.title) {
       return {
@@ -703,7 +703,7 @@ export async function getPlaylistVideoIds(playlistId: string): Promise<string[]>
   try {
     
     // Try to fetch the playlist data using YouTube's API directly
-    const youtubeApiUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${process.env.YOUTUBE_API_KEY}`;
+    const youtubeApiUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=200&playlistId=${playlistId}&key=${process.env.YOUTUBE_API_KEY}`;
     
     // Check if we have an API key - if not, use the fallback method
     if (!process.env.YOUTUBE_API_KEY) {
@@ -711,7 +711,7 @@ export async function getPlaylistVideoIds(playlistId: string): Promise<string[]>
     }
     
     try {
-      const response = await axios.get(youtubeApiUrl, { timeout: 60000 });
+      const response = await axios.get(youtubeApiUrl);
       const data = response.data;
       
       if (data && data.items && data.items.length > 0) {
@@ -749,15 +749,13 @@ async function getPlaylistVideoIdsWithWebFetch(playlistId: string): Promise<stri
   try {
     // Approach: Fetch the YouTube playlist page and extract video IDs from the HTML
     const url = `https://www.youtube.com/playlist?list=${playlistId}`;
-    
-    // Use axios to fetch the page content with proper headers
+      // Use axios to fetch the page content with proper headers
     const response = await axios.get(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml'
-      },
-      timeout: 60000
+      }
     });
     
     const html = response.data;
@@ -819,16 +817,14 @@ async function getFallbackPlaylistVideoIds(playlistId: string): Promise<string[]
     'kJQP7kiw5Fk', // Luis Fonsi - Despacito
     'OPf0YbXqDm0'  // Mark Ronson - Uptown Funk
   ];
-  
-  // Limit to just 2-3 videos to avoid excessive processing
-  return fallbackIds.slice(0, 3);
+    // Limit to just 5-10 videos to avoid excessive processing but still provide meaningful content
+  return fallbackIds.slice(0, 10);
 }
 
 // Function to fetch video IDs from a YouTube channel
 export async function getChannelVideoIds(channelId: string): Promise<string[]> {
-  try {
-    // Use yt-dlp to get recent videos from the channel (limit to 20)
-    const cmd = `yt-dlp --flat-playlist --print id --playlist-end 20 "https://www.youtube.com/channel/${channelId}/videos"`;
+  try {    // Use yt-dlp to get all videos from the channel
+    const cmd = `yt-dlp --flat-playlist --print id "https://www.youtube.com/channel/${channelId}/videos"`;
     const { stdout } = await execPromise(cmd);
     
     // Parse the output to get video IDs
@@ -1044,7 +1040,7 @@ class Semaphore {
 export async function processBatchWithConcurrency<T, R>(
   items: T[],
   processFn: (item: T) => Promise<R>,
-  concurrency: number = 5
+  concurrency: number = 20
 ): Promise<R[]> {
   const semaphore = new Semaphore(concurrency);
   
