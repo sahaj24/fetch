@@ -17,7 +17,6 @@ export async function createUserCoins(userId: string, initialCoins: number = 10)
     
     // If they already have coins, don't create a new record
     if (existingCoins) {
-      console.log('User already has coins, skipping creation');
       return true;
     }
     
@@ -35,7 +34,6 @@ export async function createUserCoins(userId: string, initialCoins: number = 10)
       return false;
     }
     
-    console.log(`Created initial ${initialCoins} coins for user ${userId}`);
     return true;
   } catch (error) {
     console.error('Unexpected error creating user coins:', error);

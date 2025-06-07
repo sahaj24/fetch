@@ -19,7 +19,6 @@ export async function deductUserCoins(
     };
   }
   
-  console.log(`🪙 COIN DEDUCT: Attempting to deduct ${amount} coins for user ${userId}`);
   
   try {
     // Step 1: Try to get existing balance or create new record
@@ -53,7 +52,6 @@ export async function deductUserCoins(
     
     if (!existingUser) {
       // User doesn't have a coin record, create one
-      console.log("🆕 Creating new coin record for user with 50 coins");
       
       const { data: insertedUser, error: insertError } = await supabase
         .from('user_coins')
@@ -74,10 +72,8 @@ export async function deductUserCoins(
       }
       
       currentBalance = insertedUser.balance || 50;
-      console.log(`✅ Created coin record with balance: ${currentBalance}`);
     } else {
       currentBalance = existingUser.balance || 0;
-      console.log(`📊 Found existing balance: ${currentBalance}`);
     }
     
     // Step 2: Check if user has enough coins
@@ -92,7 +88,6 @@ export async function deductUserCoins(
     
     // Step 3: Deduct the coins
     const newBalance = currentBalance - amount;
-    console.log(`💰 Deducting ${amount} coins: ${currentBalance} → ${newBalance}`);
     
     const { error: updateError } = await supabase
       .from('user_coins')
@@ -110,7 +105,6 @@ export async function deductUserCoins(
       };
     }
     
-    console.log(`✅ SUCCESS: Deducted ${amount} coins. New balance: ${newBalance}`);
     
     return { 
       success: true, 

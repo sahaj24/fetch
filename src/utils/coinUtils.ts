@@ -14,7 +14,6 @@ export async function initializeUserCoins(userId: string): Promise<number | null
       return null;
     }
 
-    console.log(`Initializing coins for user: ${userId}`);
 
     // First check if the user already has a coins record
     const { data: existingCoins, error: fetchError } = await supabase
@@ -33,12 +32,9 @@ export async function initializeUserCoins(userId: string): Promise<number | null
 
     // If there's no record, create one with 50 coins
     if (!existingCoins) {
-      console.log('Creating new user coins record with 50 coins welcome bonus');
       
       // TEMPORARY FIX: Skip coin initialization for now to prevent infinite loops
       // This allows the app to function while we resolve the database setup issues
-      console.log('⚠️ TEMPORARY: Skipping coin initialization to prevent infinite loops');
-      console.log('⚠️ User will be treated as having 50 coins for this session');
       
       // Return 50 as if the user has coins, but don't actually try to create the record
       // This prevents the infinite loop while maintaining functionality
@@ -46,7 +42,6 @@ export async function initializeUserCoins(userId: string): Promise<number | null
     }
     
     // If the user already has a record, return their current balance
-    console.log('User already has coins:', existingCoins.balance);
     return existingCoins.balance || 0;
   } catch (error) {
     console.error('Error in initializeUserCoins:', error);
@@ -107,7 +102,6 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       return false;
     }
     
-    console.log(`✅ deductCoinsForOperation called with userId=${userId}, operationType=${operationType}, coinsToDeduct=${coinsToDeduct}, retry=${retryCount}`);
 
     // Define the user data type for clarity
     type UserCoinData = {
@@ -128,19 +122,16 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       
       // If the user doesn't exist (no rows returned), try to initialize them
       if (error.code === 'PGRST116' && retryCount === 0) {
-        console.log('🆕 User coins record not found, attempting initialization...');
         
         const initialBalance = await initializeUserCoins(userId);
         if (initialBalance === null) {
           console.error('❌ Failed to initialize user coins');
           // TEMPORARY: Allow operation to proceed anyway to prevent UI issues
-          console.log('⚠️ TEMPORARY: Allowing operation to proceed without coin deduction');
           return true;
         }
         
         // For the temporary fix, since we're returning 50 from initializeUserCoins
         // but not actually creating a record, let's just proceed with the operation
-        console.log('✅ User coins initialized (temporary mode), proceeding with operation');
         return true;
       }
       
@@ -153,35 +144,29 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       
       // Only try to initialize if this is the first attempt
       if (retryCount === 0) {
-        console.log('✅ Attempting to initialize new coin record for user');
         const initialBalance = await initializeUserCoins(userId);
         if (initialBalance === null) {
           console.error('❌ Failed to initialize user coins');
           // TEMPORARY: Allow operation to proceed to prevent UI issues
-          console.log('⚠️ TEMPORARY: Allowing operation to proceed without coin deduction');
           return true;
         }
         
         // For temporary fix, just proceed with the operation
-        console.log('✅ User coins initialized (temporary mode), proceeding with operation');
         return true;
       }
       
       console.error('❌ No data returned after initialization attempt');
       // TEMPORARY: Allow operation to proceed to prevent UI blocking
-      console.log('⚠️ TEMPORARY: Allowing operation to proceed without coin deduction');
       return true;
     }
     
     // Process existing user
     const userCoinData = data as UserCoinData;
-    console.log('✅ User data retrieved:', userCoinData);
 
     const currentBalance = userCoinData.balance || 0;
     const totalSpent = userCoinData.total_spent || 0;
     const subscriptionTier = userCoinData.subscription_tier || 'FREE';
     
-    console.log(`📊 User ${userId} has subscription tier: ${subscriptionTier}, balance: ${currentBalance}`);
     
     // CRITICAL FIX: Force uppercase for subscription tier to ensure consistent comparison
     const normalizedTier = subscriptionTier.toUpperCase();
@@ -195,7 +180,6 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
     const newBalance = currentBalance - coinsToDeduct;
     const newTotalSpent = totalSpent + coinsToDeduct;
 
-    console.log(`💰 Updating user ${userId} coins: balance ${currentBalance} -> ${newBalance}, total_spent ${totalSpent} -> ${newTotalSpent}`);
     
     // 2. DIRECT DATABASE UPDATE
     const { error: updateError } = await supabase
@@ -212,7 +196,6 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       return false;
     }
     
-    console.log(`✅ Database update successful for user ${userId}`);
 
     // 3. RECORD THE TRANSACTION
     await recordCoinTransaction(userId, operationType, -coinsToDeduct);
@@ -225,10 +208,8 @@ export async function deductCoinsForOperation(userId: string, operationType: Ope
       .single();
       
     if (verifyData) {
-      console.log(`✅ Verified new balance: ${verifyData.balance}`);
     }
 
-    console.log(`✅ Successfully deducted ${coinsToDeduct} coins from user ${userId}. New balance: ${newBalance}`);
     return true;
   } catch (error) {
     console.error('❌ Unexpected error in deductCoinsForOperation:', error);
@@ -257,7 +238,6 @@ async function recordCoinTransaction(userId: string, operationType: OperationTyp
     return false;
   }
   
-  console.log(`✅ Recorded transaction ${transactionId}`);
   return true;
 }
 
@@ -272,7 +252,6 @@ export async function addSubscriptionCoins(userId: string, planName: string, coi
       return false;
     }
 
-    console.log(`Adding ${coinsToAdd} coins for user ${userId} from ${planName} subscription`);
 
     // First get the current balance
     const { data: userData, error: fetchError } = await supabase
@@ -317,13 +296,11 @@ export async function addSubscriptionCoins(userId: string, planName: string, coi
 
     // Record the transaction
     const transactionId = `subscription_${Date.now()}`;
-    console.log('Recording subscription transaction:', {
+    await recordCoinTransaction(
       userId,
-      transactionId,
-      amount: coinsToAdd,
-      planName,
-      type: 'SUBSCRIPTION'
-    });
+      'EXTRACT_SUBTITLES', // Use a valid OperationType
+      coinsToAdd
+    );
     
     const { error: transError } = await supabase
       .from('coin_transactions')
@@ -350,10 +327,8 @@ export async function addSubscriptionCoins(userId: string, planName: string, coi
       });
       // Continue anyway since the coins were added
     } else {
-      console.log(`✅ Successfully recorded transaction ${transactionId}`);
     }
 
-    console.log(`Successfully added ${coinsToAdd} coins to user ${userId}. New balance: ${newBalance}`);
     return true;
   } catch (error) {
     console.error('Error in addSubscriptionCoins:', error);

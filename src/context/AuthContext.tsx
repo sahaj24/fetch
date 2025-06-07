@@ -127,7 +127,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Don't manually create a profile - this is handled by the database trigger
       // Just initialize coins for the new user with 50 coins welcome bonus
       if (data.user) {
-        console.log("New user created, initializing coins:", data.user.id);
         await initializeUserCoins(data.user.id);
       }
       

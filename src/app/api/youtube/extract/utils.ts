@@ -35,7 +35,6 @@ export interface SubtitleResult {
 
 // Function to extract the video ID from a YouTube URL
 export function extractVideoId(url: string): string | null {
-  // console.log(`Extracting ID from URL: ${url}`);
   
   // Clean the URL if needed
   const cleanUrl = url.trim();
@@ -47,7 +46,6 @@ export function extractVideoId(url: string): string | null {
   const watchMatch = cleanUrl.match(watchRegex);
   
   if (watchMatch && watchMatch[1]) {
-    // console.log(`Found video ID: ${watchMatch[1]}`);
     return watchMatch[1];
   }
   
@@ -61,19 +59,16 @@ export function extractVideoId(url: string): string | null {
     if (cleanUrl.includes('v=') && cleanUrl.includes('list=')) {
       // Check if there's an explicit indicator that we want the playlist
       if (cleanUrl.includes('playlist') || cleanUrl.includes('&list=')) {
-        // console.log(`Found playlist ID: ${playlistMatch[1]}`);
         return `playlist:${playlistMatch[1]}`;
       } else {
         // Default to video ID for watch URLs with playlist parameters
         const videoMatch = cleanUrl.match(/[?&]v=([^&]{11})/);
         if (videoMatch && videoMatch[1]) {
-          // console.log(`Found video ID from watch URL with playlist: ${videoMatch[1]}`);
           return videoMatch[1];
         }
       }
     }
     
-    // console.log(`Found playlist ID: ${playlistMatch[1]}`);
     return `playlist:${playlistMatch[1]}`;
   }
   
@@ -82,11 +77,9 @@ export function extractVideoId(url: string): string | null {
   const channelMatch = cleanUrl.match(channelRegex);
   
   if (channelMatch && channelMatch[1]) {
-    // console.log(`Found channel ID: ${channelMatch[1]}`);
     return `channel:${channelMatch[1]}`;
   }
   
-  // console.log(`No ID found in URL: ${cleanUrl}`);
   return null;
 }
 
@@ -103,12 +96,10 @@ export async function getVideoInfo(videoId: string): Promise<{ title: string; du
 
   // Method 1: Direct HTTP request to YouTube's oEmbed API (most reliable)
   try {
-    // console.log(`Fetching title for video ${videoId} via oEmbed API`);
     const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
     const response = await axios.get(oembedUrl, { timeout: 5000 });
     
     if (response.data && response.data.title) {
-      // console.log(`Found title via oEmbed API: "${response.data.title}"`);
       return {
         title: response.data.title,
         duration: 0
@@ -120,12 +111,10 @@ export async function getVideoInfo(videoId: string): Promise<{ title: string; du
 
   // Method 2: Try to use yt-dlp (fallback)
   try {
-    // console.log(`Trying yt-dlp to get title for ${videoId}`);
     const cmd = `yt-dlp --no-warnings --skip-download --print title -- ${videoId}`;
     const { stdout } = await execPromise(cmd, { timeout: 10000 });
     
     if (stdout && stdout.trim()) {
-      // console.log(`Found title via yt-dlp: "${stdout.trim()}"`);
       return {
         title: stdout.trim(),
         duration: 0
@@ -137,13 +126,11 @@ export async function getVideoInfo(videoId: string): Promise<{ title: string; du
 
   // Method 3: Use YouTube's Data API via a public endpoint 
   try {
-    // console.log(`Trying public metadata endpoint for ${videoId}`);
     // Use a public no-auth required endpoint that gives basic video info
     const metadataUrl = `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`;
     const metaResponse = await axios.get(metadataUrl, { timeout: 5000 });
     
     if (metaResponse.data && metaResponse.data.title) {
-      // console.log(`Found title via noembed: "${metaResponse.data.title}"`);
       return {
         title: metaResponse.data.title,
         duration: 0
@@ -154,7 +141,6 @@ export async function getVideoInfo(videoId: string): Promise<{ title: string; du
   }
 
   // If all methods fail, return a fallback with the ID
-  // console.log(`All title extraction methods failed for ${videoId}, using fallback title`);
   return {
     title: `YouTube Video ${videoId}`,
     duration: 0
@@ -165,16 +151,13 @@ export async function getVideoInfo(videoId: string): Promise<{ title: string; du
 export async function fetchTranscript(videoId: string, language: string = 'en'): Promise<TranscriptItem[]> {
   // Skip most pre-checks to speed things up
   try {
-    // console.log(`Fetching transcript for video ID: ${videoId} in language: ${language}`);
     
     // Try YouTubeTranscript API first - much faster than yt-dlp
     try {
       const langCode = language === 'auto' ? 'en' : language;
-      // console.log('Using fast YouTube Transcript API method first...');
       const transcriptList = await YoutubeTranscript.fetchTranscript(videoId, { lang: langCode });
       
       if (transcriptList && transcriptList.length > 0) {
-        // console.log(`Successfully retrieved transcript using YouTube Transcript API (${transcriptList.length} items)`);
         return transcriptList.map(item => ({
           text: item.text,
           offset: item.offset,
@@ -182,7 +165,6 @@ export async function fetchTranscript(videoId: string, language: string = 'en'):
         }));
       }
     } catch (apiError) {
-      // console.log('YouTube Transcript API failed, falling back to yt-dlp...');
     }
     
     // Create a temporary directory for subtitle files
@@ -191,7 +173,6 @@ export async function fetchTranscript(videoId: string, language: string = 'en'):
     
     try {
       // Try auto-generated subtitles directly (skip regular subtitles attempt to save time)
-      // console.log('Attempting to fetch auto-generated subtitles...');
       const autoSubCommand = `yt-dlp --no-warnings --skip-download --write-auto-sub --sub-format vtt --output "${subtitlePath}" -- ${videoId}`;
       
       // Use a shorter timeout to avoid long waits
@@ -201,7 +182,6 @@ export async function fetchTranscript(videoId: string, language: string = 'en'):
       const vttFiles = fs.readdirSync(tempDir).filter(file => file.endsWith('.vtt'));
       
       if (vttFiles.length > 0) {
-        // console.log(`Found ${vttFiles.length} auto-generated VTT subtitle file(s)`);
         const vttFilePath = path.join(tempDir, vttFiles[0]);
         const vttContent = fs.readFileSync(vttFilePath, 'utf8');
         return parseVttContent(vttContent);
@@ -608,14 +588,12 @@ export function getLanguageName(code: string): string {
 // Function to fetch video IDs from a YouTube playlist using a web-based approach instead of yt-dlp
 export async function getPlaylistVideoIds(playlistId: string): Promise<string[]> {
   try {
-    console.log(`Fetching videos for playlist ID: ${playlistId} using web API method`);
     
     // Try to fetch the playlist data using YouTube's API directly
     const youtubeApiUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&key=${process.env.YOUTUBE_API_KEY}`;
     
     // Check if we have an API key - if not, use the fallback method
     if (!process.env.YOUTUBE_API_KEY) {
-      console.log('No YouTube API key found, using alternative method');
       return await getPlaylistVideoIdsWithWebFetch(playlistId);
     }
     
@@ -632,11 +610,9 @@ export async function getPlaylistVideoIds(playlistId: string): Promise<string[]>
           return null;
         }).filter((id: string | null) => id !== null);
         
-        console.log(`Successfully extracted ${videoIds.length} video IDs from playlist using YouTube API`);
         return videoIds;
       }
     } catch (apiError) {
-      console.log('YouTube API failed, falling back to web fetch method');
     }
     
     // If API approach fails, use the alternative web fetch method
@@ -656,7 +632,6 @@ export async function getPlaylistVideoIds(playlistId: string): Promise<string[]>
 
 // Fetch playlist videos using web fetch (without relying on yt-dlp)
 async function getPlaylistVideoIdsWithWebFetch(playlistId: string): Promise<string[]> {
-  console.log(`Using web fetch method for playlist ${playlistId}`);
   
   try {
     // Approach: Fetch the YouTube playlist page and extract video IDs from the HTML
@@ -708,7 +683,6 @@ async function getPlaylistVideoIdsWithWebFetch(playlistId: string): Promise<stri
     const videoIds = Array.from(foundIds);
     
     if (videoIds.length > 0) {
-      console.log(`Web fetch found ${videoIds.length} videos in playlist`);
       return videoIds;
     }
     
@@ -722,7 +696,6 @@ async function getPlaylistVideoIdsWithWebFetch(playlistId: string): Promise<stri
 
 // Fallback method that returns sample video IDs when all other methods fail
 async function getFallbackPlaylistVideoIds(playlistId: string): Promise<string[]> {
-  console.log(`Using fallback method for playlist ${playlistId} - returning sample videos`);
   
   // Return a few sample video IDs so the application doesn't break
   // These are popular videos that likely have subtitles
@@ -852,7 +825,6 @@ export async function parseCSVContent(csvContent: string): Promise<CSVParsingRes
     
     // Try to parse as CSV with the detected delimiter
     try {
-      // console.log(`Parsing CSV with delimiter: '${delimiter}', headers: ${hasHeaderRow}`);
       const parseOptions = { 
         skip_empty_lines: true,
         delimiter,

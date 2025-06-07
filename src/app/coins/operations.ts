@@ -12,12 +12,10 @@ const safeUpdateCoinStore = (updatedCoins: any) => {
       if (coinStore && coinStore.setCoins) {
         coinStore.setCoins(updatedCoins);
         coinStore.refreshCoins();
-        console.log("Global coin state updated with new balance:", updatedCoins.balance);
       }
     }
   } catch (error) {
     // Silently catch errors but don't interrupt the flow
-    console.log("Info: Coin state update skipped (likely server-side)");
   }
 };
 
@@ -79,7 +77,6 @@ export async function checkUserBalance(estimatedAmount: number): Promise<{
     const userCoins = await getUserCoins();
     const currentBalance = userCoins?.balance || 0;
     
-    console.log(`Checking balance: Need ${estimatedAmount}, has ${currentBalance}`);
     
     return {
       hasEnoughCoins: currentBalance >= estimatedAmount,
@@ -107,7 +104,6 @@ export async function directDeductCoinsForProcessing(
   error?: string;
 }> {
   try {
-    console.log(`Deducting coins for processing: userId=${userId}, type=${inputType}, videos=${processedVideoCount}`);
     
     // Calculate actual cost
     let cost = 0;
@@ -137,7 +133,6 @@ export async function directDeductCoinsForProcessing(
     cost = Math.max(cost, 1);
     
     // Log the exact cost calculation to help with debugging
-    console.log(`Final cost calculation for ${processedVideoCount} videos: ${cost} coins`);
     
     // Deduct coins directly with userId
     const deductionResult = await directCoinDeduction(userId, cost, `Processed ${processedVideoCount} video${processedVideoCount !== 1 ? 's' : ''}`);
@@ -156,7 +151,6 @@ export async function directDeductCoinsForProcessing(
           
           // Update the global coin store with this data
           safeUpdateCoinStore(updatedCoins);
-          console.log("Global coin state updated with balance:", deductionResult.remainingBalance);
         }
       } catch (error) {
         console.error("Error updating coin state:", error);

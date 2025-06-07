@@ -12,30 +12,24 @@ function generateId(): string {
 
 // Helper function to ensure user is authenticated
 export async function ensureAuthenticated(): Promise<string | null> {
-  return new Promise((resolve) => {
-    // Check if there's a session in Supabase
+  return new Promise((resolve) => {    // Check if there's a session in Supabase
     supabase.auth.getSession().then(({ data }) => {
       if (data.session?.user) {
-        console.log('User already authenticated:', data.session.user.id);
         resolve(data.session.user.id);
       } else {
         // Set up an auth state listener to wait for authentication
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
           if (event === 'SIGNED_IN' && session) {
-            console.log('User authenticated:', session.user.id);
             subscription.unsubscribe(); // Unsubscribe to avoid memory leaks
             resolve(session.user.id);
           } else if (event === 'SIGNED_OUT') {
-            console.log('No user authenticated');
             subscription.unsubscribe(); // Unsubscribe to avoid memory leaks
             resolve(null);
           }
         });
-        
-        // If no auth change event happens after a timeout, resolve with null
+          // If no auth change event happens after a timeout, resolve with null
         setTimeout(() => {
           subscription.unsubscribe();
-          console.log('Auth check timed out');
           resolve(null);
         }, 3000);
       }
@@ -99,7 +93,7 @@ export interface Transaction {
 // Track initialization attempts to prevent duplicates
 const initializationInProgress = new Map<string, Promise<UserCoins>>();
 
-// Create a cache to track documents we've already verified or created
+// Track documents we've already verified or created in this session
 // This prevents duplicate initialization attempts in a single session
 const verifiedDocuments = new Set<string>();
 
@@ -122,16 +116,12 @@ export async function getOrCreateUserCoinsDocument(userId: string): Promise<User
     if (fetchError && fetchError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
       throw fetchError;
     }
-    
-    if (existingCoins) {
-      // Document exists - return its data and cache it
-      console.log(`FOUND: User ${userId} already has a coins document`);
-      saveCachedUserCoins(userId, existingCoins as UserCoins);
+      if (existingCoins) {
+      // Document exists - return its data
       return existingCoins as UserCoins;
     }
     
     // Document doesn't exist - create a new one using upsert
-    console.log(`CREATING: New coins document for user ${userId} using upsert pattern`);
     
     // Create basic structure
     const now = serverTimestamp();
@@ -161,20 +151,14 @@ export async function getOrCreateUserCoinsDocument(userId: string): Promise<User
     if (insertError) {
       throw insertError;
     }
+      const finalData = insertedData as UserCoins;
     
-    const finalData = insertedData as UserCoins;
-    
-    // Cache the data
-    saveCachedUserCoins(userId, finalData);
-    
-    console.log(`CREATED: Coins document for user ${userId}`);
     return finalData;
-  } catch (error) {
-    console.error(`ERROR: Failed to get/create coins for user ${userId}:`, error);
+  } catch (error) {    console.error(`ERROR: Failed to get/create coins for user ${userId}:`, error);
     
     // Final fallback - try once more to get the document
     // This handles the case where another process created it after we checked
-    try {      console.log("FALLBACK: Checking if document exists after error");
+    try {
       const { data: fallbackData } = await supabase
         .from('user_coins')
         .select('*')
@@ -182,7 +166,6 @@ export async function getOrCreateUserCoinsDocument(userId: string): Promise<User
         .single();
       
       if (fallbackData) {
-        console.log("FALLBACK: Document exists, returning data");
         return fallbackData as UserCoins;
       }
     } catch (fallbackError) {
@@ -200,7 +183,6 @@ export async function getOrCreateUserCoinsDocument(userId: string): Promise<User
 export async function initializeUserCoins(userId: string): Promise<UserCoins> {
   // If initialization is already in progress for this user, wait for it to complete
   if (initializationInProgress.has(userId)) {
-    console.log(`Initialization already in progress for user ${userId}, waiting...`);
     try {
       return await initializationInProgress.get(userId)!;
     } catch (error) {
@@ -218,7 +200,6 @@ export async function initializeUserCoins(userId: string): Promise<UserCoins> {
       
       // If we've already verified this document exists in this session, skip the check
       if (verifiedDocuments.has(userId)) {
-        console.log(`Document for user ${userId} was already verified/created this session`);
           // Still try to get the latest data
         const { data } = await supabase
           .from('user_coins')
@@ -243,16 +224,13 @@ export async function initializeUserCoins(userId: string): Promise<UserCoins> {
       if (existingError && existingError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
         throw existingError;
       }
-      
-      if (existingData) {
+        if (existingData) {
         // Mark the document as verified for this session
         verifiedDocuments.add(userId);
-        saveCachedUserCoins(userId, existingData as UserCoins);
         return existingData as UserCoins;
       }
       
       // Document doesn't exist, create it
-      console.log(`Creating new coins document for user ${userId}`);
       
       // Create a welcome transaction
       const now = serverTimestamp();
@@ -287,15 +265,7 @@ export async function initializeUserCoins(userId: string): Promise<UserCoins> {
       verifiedDocuments.add(userId);
       
       return insertedData as UserCoins;
-    } catch (error) {
-      console.error("Error initializing user coins:", error);
-      
-      // Attempt to get from cache as a fallback
-      const cachedCoins = getCachedUserCoins(userId);
-      if (cachedCoins) {
-        console.log("Using cached coins data due to initialization error");
-        return cachedCoins;
-      }
+    } catch (error) {      console.error("Error initializing user coins:", error);
       
       // If all else fails, return a default
       console.warn("Returning default coins due to initialization failure");
@@ -318,7 +288,6 @@ export async function initializeUserCoins(userId: string): Promise<UserCoins> {
  */
 export async function getUserCoins(providedUserId?: string): Promise<UserCoins | null> {
   try {
-    console.log('⭐ getUserCoins called with providedUserId:', providedUserId);
     
     // Check if Supabase is initialized
     if (!supabase) {
@@ -329,36 +298,22 @@ export async function getUserCoins(providedUserId?: string): Promise<UserCoins |
     // Use provided user ID or get current user's ID
     let userId = providedUserId;
     if (!userId) {
-      console.log('🔍 No userId provided, fetching from current session');
       const { data: { user } } = await supabase.auth.getUser();
       userId = user?.id;
       
       if (!userId) {
         // No authenticated user - return anonymous coins with free starter balance
-        console.log('👤 No authenticated user, returning anonymous coins with 15 free coins');
         return getAnonymousUserCoins(); // Anonymous users get 15 free coins
       }
     }
-    console.log('🏁 Proceeding to getCoinsForUser with userId:', userId);
     // Get the user's coins document
     const result = await getCoinsForUser(userId);
-    console.log('💰 getCoinsForUser result:', result);
     return result;
   } catch (error) {
     console.error("Error getting user coins:", error);
     if (error instanceof Error && 
         (error.message.includes('offline') || 
-         error.message.includes('network'))) {
-      // Network error - try to get from local cache
-      console.log("Network error, trying to use cached coins");
-      const { data: { user } } = await supabase.auth.getUser();
-      const userId = user?.id;
-      if (userId) {
-        const cachedCoins = getCachedUserCoins(userId);
-        if (cachedCoins) {
-          return cachedCoins;
-        }
-      }
+         error.message.includes('network'))) {      // Network error - return anonymous coins as fallback
     }
     // On any error for a non-logged in user, return anonymous coins
     if (!providedUserId) {
@@ -431,34 +386,7 @@ export function getDefaultUserCoins(isAnonymous: boolean = false): UserCoins {
   } as UserCoins;
 }
 
-/**
- * Try to get cached coins from localStorage
- */
-export function getCachedUserCoins(userId: string): UserCoins | null {
-  if (typeof window === 'undefined') {
-    return null; // Not in browser
-  }
-  
-  try {
-    const cacheKey = `userCoins_${userId}`;
-    const cachedData = localStorage.getItem(cacheKey);
-    
-    if (!cachedData) {
-      return null;
-    }
-    
-    const coins = JSON.parse(cachedData);
-    
-    // Add a flag so we know this is from cache
-    return {
-      ...coins,
-      _fromCache: true
-    };
-  } catch (error) {
-    console.error("Error getting cached coins:", error);
-    return null;
-  }
-}
+
 
 /**
  * Add coins to user's balance
@@ -497,7 +425,6 @@ export async function addCoins(amount: number, description: string): Promise<boo
       throw error;
     }
     
-    console.log(`Successfully added ${amount} coins to user ${userId}`);
     return true;
   } catch (error) {
     console.error("Error adding coins:", error);
@@ -553,7 +480,6 @@ export async function spendCoins(amount: number, description: string): Promise<b
       throw error;
     }
     
-    console.log(`Successfully spent ${amount} coins from user ${userId}`);
     return true;
   } catch (error) {
     console.error("Error spending coins:", error);
@@ -605,7 +531,6 @@ export async function updateSubscription(tier: keyof typeof SUBSCRIPTION_TIERS):
       throw error;
     }
     
-    console.log(`Successfully updated subscription for user ${userId} to ${tier}`);
     return true;
   } catch (error) {
     console.error("Error updating subscription:", error);
@@ -652,7 +577,6 @@ export async function directCoinDeduction(
       error: 'No user ID provided'
     };
   }
-    console.log(`SUPABASE LOG: Direct coin deduction attempt for user ${userId}: ${amount} coins for ${description}`);
   
   try {
     // Get the user's current coins
@@ -674,15 +598,7 @@ export async function directCoinDeduction(
         remainingBalance: userCoins.balance,
         currentBalance: userCoins.balance,
         error: `Not enough coins. You have ${userCoins.balance} coins, but this operation requires ${amount} coins.`
-      };
-    }
-    
-    console.log("SUPABASE LOG: Attempting to deduct coins directly", {
-      userId,
-      currentBalance: userCoins.balance,
-      amountToSpend: amount,
-      newBalance: userCoins.balance - amount
-    });
+      };    }
     
     // Directly update the user's coin balance (simplified approach)
     const newBalance = userCoins.balance - amount;
@@ -699,7 +615,6 @@ export async function directCoinDeduction(
       throw updateError;
     }
     
-    console.log(`SUPABASE LOG: Successfully deducted ${amount} coins from user ${userId}. New balance: ${newBalance}`);
     
     return { 
       success: true, 
@@ -720,7 +635,6 @@ export async function directCoinDeduction(
  * Ensure the user_coins table exists in the database
  */
 async function ensureUserCoinsTable(): Promise<boolean> {try {
-    console.log("🏗️ Checking if user_coins table exists...");
     
     // Simple check: try to query the table directly
     const { data, error } = await supabase
@@ -731,16 +645,12 @@ async function ensureUserCoinsTable(): Promise<boolean> {try {
     if (error) {
       // If error contains "relation does not exist", the table doesn't exist
       if (error.message && error.message.includes('relation') && error.message.includes('does not exist')) {
-        console.log("📋 Table user_coins does not exist");
-        console.log("⚠️ Please create the user_coins table manually or run the database setup script");
         return false;
       } else {
         // Some other error, but table likely exists
-        console.log("📋 Table user_coins exists but encountered an error:", error.message);
         return true;
       }
     }    
-    console.log("✅ Table user_coins exists and is accessible");
     return true;
   } catch (error) {
     console.error("❌ Error ensuring user_coins table:", {
@@ -764,7 +674,6 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
   }
   
   try {
-    console.log(`🔍 DEBUG: Getting coins for user ${userId}`);
     
     // Check if the table exists first
     await ensureUserCoinsTable();
@@ -772,7 +681,6 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
     // Try to get from database
     // Note: PostgreSQL treats quoted identifiers as case-sensitive
     // Try with different case variations of the table name
-    console.log(`💾 DEBUG: Querying table with user_id=${userId}`);
     
     // Try 'user_coins' (snake_case - most common convention in PostgreSQL)
     const { data: data1, error: error1 } = await supabase
@@ -782,7 +690,6 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
       .single();
     
     if (!error1 && data1) {
-      console.log('✅ Found coins in user_coins table');
       return data1 as UserCoins;
     }
     
@@ -794,7 +701,6 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
       .single();
     
     if (!error2 && data2) {
-      console.log('✅ Found coins in usercoins table');
       return data2 as UserCoins;
     }
     
@@ -805,7 +711,6 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
       .eq('user_id', userId)
       .single();
     
-    console.log("🔄 DEBUG: Query completed, data:", data, "error:", error);
     
     if (error) {
       console.error("❌ ERROR in getCoinsForUser:", error);
@@ -818,48 +723,25 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
         hint: error.hint,
         userId
       });
-      
-      // Try to get cached data if Supabase fails
-      const cachedCoins = getCachedUserCoins(userId);
-      if (cachedCoins) {
-        console.log("📦 Using cached coin data due to Supabase error");
-        return cachedCoins;
-      }
         // If no coins found, handle gracefully to prevent infinite loops
       if (error.code === "PGRST116") { // No rows returned
-        console.log("🆕 No coins found for user, using temporary fallback to prevent infinite loops");
         
         // TEMPORARY FIX: Return anonymous coins to prevent UI breaking
         // This prevents the infinite loop while database issues are resolved
-        console.log("⚠️ TEMPORARY: Returning anonymous coins instead of trying to create record");
         return getAnonymousUserCoins(); // 15 free coins
       }
       
       // For any other error, return default coins
-      console.log("⚠️ Using default coins due to error");
       return getDefaultUserCoins();
     }
-    
-    // Successfully retrieved user coins
-    console.log("✅ Successfully retrieved coins:", data);
-    
-    // Save in cache
-    saveCachedUserCoins(userId, data as UserCoins);
+      // Successfully retrieved user coins
     
     return data as UserCoins;
   } catch (error: any) {
     console.error("❌ Error getting coins for user:", error);
-    
-    // Check for permission errors (user not logged in)
+      // Check for permission errors (user not logged in)
     if (error.code === "permission-denied") {
-      console.log("🔒 User not authorized to access coins");
       return getAnonymousUserCoins(); // Give anonymous users 15 free coins
-    }
-    
-    // Try to get cached data if Supabase fails
-    const cachedCoins = getCachedUserCoins(userId);
-    if (cachedCoins) {
-      return cachedCoins;
     }
     
     // Return anonymous coins with 15 free coins as a fallback
@@ -867,18 +749,4 @@ export async function getCoinsForUser(userId: string): Promise<UserCoins | null>
   }
 }
 
-/**
- * Save coins to localStorage
- */
-export function saveCachedUserCoins(userId: string, coins: UserCoins): void {
-  if (typeof window === 'undefined') {
-    return; // Not in browser
-  }
-  
-  try {
-    const cacheKey = `userCoins_${userId}`;
-    localStorage.setItem(cacheKey, JSON.stringify(coins));
-  } catch (error) {
-    console.error("Error saving coins to cache:", error);
-  }
-}
+

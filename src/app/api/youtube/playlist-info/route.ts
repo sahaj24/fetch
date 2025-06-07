@@ -43,7 +43,6 @@ export async function GET(request: Request) {
     // Check cache first
     const cached = getFromCache(playlistId);
     if (cached) {
-      console.log(`Cache hit for playlist ${playlistId}`);
       return NextResponse.json(cached);
     }
 
@@ -79,43 +78,33 @@ async function getPlaylistInfoFast(playlistId: string): Promise<PlaylistInfo> {
   // Method 1: Try YouTube Data API v3 (fastest and most accurate)
   if (process.env.YOUTUBE_API_KEY) {
     try {
-      console.log(`Trying YouTube Data API for playlist ${playlistId}`);
       const result = await getPlaylistInfoFromAPI(playlistId);
       if (result) {
-        console.log(`✓ YouTube API success: ${result.videoCount} videos`);
         return result;
       }
     } catch (error) {
-      console.log(`YouTube API failed: ${error}`);
     }
   }
 
   // Method 2: Try yt-dlp (fast and reliable)
   try {
-    console.log(`Trying yt-dlp for playlist ${playlistId}`);
     const result = await getPlaylistInfoFromYtDlp(playlistId);
     if (result && result.videoCount > 0) {
-      console.log(`✓ yt-dlp success: ${result.videoCount} videos`);
       return result;
     }
   } catch (error) {
-    console.log(`yt-dlp failed: ${error}`);
   }
 
   // Method 3: Try web scraping without browser (lighter weight)
   try {
-    console.log(`Trying web scraping for playlist ${playlistId}`);
     const result = await getPlaylistInfoFromWeb(playlistId);
     if (result && result.videoCount > 0) {
-      console.log(`✓ Web scraping success: ${result.videoCount} videos`);
       return result;
     }
   } catch (error) {
-    console.log(`Web scraping failed: ${error}`);
   }
 
   // Method 4: Fallback to intelligent estimate
-  console.log(`All methods failed, using estimate for playlist ${playlistId}`);
   return {
     title: 'YouTube Playlist',
     videoCount: getPlaylistEstimate(playlistId),

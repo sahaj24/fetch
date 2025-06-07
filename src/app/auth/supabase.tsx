@@ -15,7 +15,6 @@ export async function signInWithEmail(email: string, password: string) {
     // Initialize coins for existing users during sign-in
     if (data?.user) {
       try {
-        console.log('Ensuring coins for user:', data.user.id);
         await ensureUserCoins(data.user.id);
       } catch (coinError) {
         console.error('Error ensuring user coins at login:', coinError);
@@ -60,7 +59,6 @@ export async function signUpWithEmail(email: string, password: string, displayNa
         });
         
         // Initialize coins directly
-        console.log('Creating coins for new user:', data.user.id);
         await createUserCoins(data.user.id);
       } catch (profileError) {
         console.error('Error setting up user profile:', profileError);

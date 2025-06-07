@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/supabase/config";
-import { getUserCoins, UserCoins, saveCachedUserCoins } from "./utils";
+import { getUserCoins, UserCoins } from "./utils";
 import { create } from "zustand";
 
 // Track active listeners to avoid duplicates
@@ -34,7 +34,6 @@ export const useCoinStore = create<CoinState>((set) => ({
       
       if (!userId) {
         // No authenticated user - use anonymous coins with 15 free coins
-        console.log('No authenticated user, getting anonymous coins');
         const anonymousCoins = await getUserCoins(); // This will return anonymous coins
         if (anonymousCoins) {
           set({ userCoins: anonymousCoins, error: null, lastUpdated: Date.now() });
@@ -78,18 +77,12 @@ export const useCoinStore = create<CoinState>((set) => ({
 function manualCoinRefresh(userId: string, onUpdate: (data: UserCoins) => void): () => void {
   if (!userId) return () => {};
   
-  console.log(`Setting up manual refresh for user ${userId}'s coins`);
   
   // Function to fetch the latest coin data
   const fetchCoins = async () => {
-    try {
-      const userCoins = await getUserCoins(userId);
+    try {    const userCoins = await getUserCoins(userId);
       if (userCoins) {
         onUpdate(userCoins);
-        // Cache the data
-        if (typeof window !== 'undefined') {
-          saveCachedUserCoins(userId, userCoins);
-        }
       }
     } catch (error) {
       console.error("Error manually refreshing coins:", error);
@@ -157,7 +150,6 @@ export function useCoins(autoRefreshInterval = 30000) {
               error: null,
               lastUpdated: Date.now()
             });
-            console.log('User signed out, loaded anonymous coins with free balance');
           }
         } catch (error) {
           console.error('Error loading anonymous coins after logout:', error);
@@ -196,16 +188,13 @@ export function useCoins(autoRefreshInterval = 30000) {
   // Set up manual coin refresh interval
   useEffect(() => {
     if (!userId) {
-      console.log("No userId for coin refresh");
       return () => {};
     }
     
-    console.log("Setting up manual refresh for coins, user:", userId);
     const unsubscribe = manualCoinRefresh(userId, setCoins);
 
     // Return cleanup function
     return () => {
-      console.log("Cleaning up coin refresh interval");
       unsubscribe();
     };
   }, [userId, setCoins]);
@@ -213,7 +202,6 @@ export function useCoins(autoRefreshInterval = 30000) {
   // Force refresh when lastUpdated changes
   useEffect(() => {
     if (lastUpdated > localLastUpdate && localLastUpdate > 0) {
-      console.log("Detected store update, refreshing local state");
       setLocalLastUpdate(lastUpdated);
     }
   }, [lastUpdated, localLastUpdate]);
@@ -229,7 +217,6 @@ export function useCoins(autoRefreshInterval = 30000) {
     // Initial shorter interval for quick updates
     const shortIntervalId = setInterval(() => {
       if (userId && useShortInterval) {
-        console.log("Quick refresh cycle");
         refreshCoins();
         setLocalLastUpdate(Date.now());
       }
@@ -243,7 +230,6 @@ export function useCoins(autoRefreshInterval = 30000) {
       // Regular interval for background updates
       const intervalId = setInterval(() => {
         if (userId) {
-          console.log("Regular refresh cycle");
           refreshCoins();
           setLocalLastUpdate(Date.now());
         }

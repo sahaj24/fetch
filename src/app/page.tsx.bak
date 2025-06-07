@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, startTransition } from "react";
+import Image from "next/image";
 import {
   Card,
   CardContent,
@@ -277,7 +278,8 @@ export default function Home() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
   
-  // Handle input changes for dynamic coin calculation  const handleInputChange = (data: { videoCount: number; isPlaylist: boolean }) => {
+  // Handle input changes for dynamic coin calculation
+  const handleInputChange = (data: { videoCount: number; isPlaylist: boolean }) => {
     setVideoCount(data.videoCount);
     setIsPlaylist(data.isPlaylist);
   };
@@ -462,8 +464,7 @@ export default function Home() {
         
         // Calculate cost
         let coinCost = payload.coinCostEstimate || 1;
-        
-        // Deduct coins
+          // Deduct coins
         const deductResult = coinDeductionFunction(coinCost);        if (!deductResult.success) {
           clearInterval(progressInterval);
           toast.error("Insufficient Free Coins: You've used all your free coins. Sign up for more!", {
@@ -474,6 +475,15 @@ export default function Home() {
         }
         
         console.log(`Anonymous coins deducted: ${coinCost}. Remaining: ${deductResult.remainingCoins}`);
+        
+        // Immediately refresh anonymous coin display after deduction
+        if (typeof window !== 'undefined') {
+          const coinUpdateEvent = new CustomEvent('anonymousCoinChange', { 
+            detail: { balance: deductResult.remainingCoins } 
+          });
+          window.dispatchEvent(coinUpdateEvent);
+          console.log('🔄 Anonymous coin balance updated in UI after deduction');
+        }
       }
         console.log(`[INFO] Processing request for user ${userId} with payload:`, {
         inputType: payload.inputType,
@@ -578,11 +588,34 @@ export default function Home() {
         setTimeout(() => {
           saveState();
         }, 10);
-        
-        // Re-enable coin balance updates after state transition is complete
+          // Re-enable coin balance updates after state transition is complete
         setTimeout(() => {
           console.log('✅ Re-enabling coin balance updates after processing transition');
           setIsProcessingTransition(false);
+            // Refresh coin balance after processing completion to show updated balance
+          console.log('🔄 Refreshing coin balance after successful task completion');
+          if (isAnonymousUser) {
+            // For anonymous users, dispatch event to refresh UI
+            if (typeof window !== 'undefined') {
+              const coinRefreshEvent = new CustomEvent('anonymousCoinRefresh');
+              window.dispatchEvent(coinRefreshEvent);
+              console.log('✅ Anonymous coin refresh event dispatched');
+            }
+          } else {
+            // For logged-in users, refresh from the global store
+            const refreshUserCoins = async () => {
+              try {
+                // Import the store first, then access refreshCoins through the store instance
+                const { useCoinStore } = await import('@/app/coins/hooks');
+                const store = useCoinStore.getState();
+                await store.refreshCoins();
+                console.log('✅ User coin balance refreshed after task completion');
+              } catch (error) {
+                console.error('❌ Error refreshing user coins after task completion:', error);
+              }
+            };
+            refreshUserCoins();
+          }
         }, 500); // Wait longer to ensure tab state is fully committed
         
         // Also force save directly to localStorage as backup
@@ -645,8 +678,7 @@ export default function Home() {
     } finally {
       setIsLoadingCoins(false);
     }
-  };
-  // Calculate estimated coin cost based on current selections
+  };  // Calculate estimated coin cost based on current selections
   const calculateCoinCost = useCallback(() => {
     console.log('🔍 DEBUG: calculateCoinCost called with state:', {
       videoCount,
@@ -662,14 +694,18 @@ export default function Home() {
     // Handle calculation based on input type
     if (isPlaylist) {
       // For playlists/channels - use batch rate
-      baseCost = videoCount * OPERATION_COSTS.BATCH_SUBTITLE * selectedFormats.length;
-      console.log(`[COST] Playlist mode: ${videoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate × ${selectedFormats.length} formats = ${baseCost}`);
+      // Round videoCount to ensure integer values for consistent calculations
+      const roundedVideoCount = Math.max(1, Math.round(videoCount));
+      baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE * selectedFormats.length;
+      console.log(`[COST] Playlist mode: ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate × ${selectedFormats.length} formats = ${baseCost}`);
     } else {
       // For single videos
       if (videoCount > 1) {
         // Multiple single videos (from CSV)
-        baseCost = videoCount * OPERATION_COSTS.BATCH_SUBTITLE * selectedFormats.length;
-        console.log(`[COST] Multiple videos: ${videoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate × ${selectedFormats.length} formats = ${baseCost}`);
+        // Round videoCount to ensure integer values for consistent calculations
+        const roundedVideoCount = Math.max(1, Math.round(videoCount));
+        baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE * selectedFormats.length;
+        console.log(`[COST] Multiple videos: ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate × ${selectedFormats.length} formats = ${baseCost}`);
       } else {
         // Just one video
         baseCost = OPERATION_COSTS.SINGLE_SUBTITLE * selectedFormats.length;
@@ -678,8 +714,10 @@ export default function Home() {
     }
     
     // Calculate total with minimum of 1 coin
-    const total = Math.max(baseCost, 1);
-    console.log(`[COST] Final cost calculation: ${baseCost} base = ${total} coins`);
+    // Round to 2 decimal places and then convert to integer to ensure consistent calculations
+    const roundedBaseCost = Math.round(baseCost * 100) / 100;
+    const total = Math.max(Math.ceil(roundedBaseCost), 1);
+    console.log(`[COST] Final cost calculation: ${roundedBaseCost} base = ${total} coins`);
     
     return total;
   }, [videoCount, selectedFormats, isPlaylist]);
@@ -727,24 +765,28 @@ export default function Home() {
     };
 
     fetchUserCoins();
-  }, [videoCount, selectedFormats.length, calculateCoinCost, isProcessingTransition]);
-  // Effect to update coin estimation when inputs change
+  }, [videoCount, selectedFormats.length, calculateCoinCost, isProcessingTransition]);  // Effect to update coin estimation when inputs change
   useEffect(() => {
     console.log('🔍 DEBUG: Cost estimation useEffect triggered');
-    const estimatedCost = calculateCoinCost();
-    console.log('🔍 DEBUG: Setting coinCostEstimate to:', estimatedCost);
-    setCoinCostEstimate(estimatedCost);
+    // Use setTimeout to ensure we have the latest state
+    const timeoutId = setTimeout(() => {
+      const estimatedCost = calculateCoinCost();
+      console.log('🔍 DEBUG: Setting coinCostEstimate to:', estimatedCost);
+      setCoinCostEstimate(estimatedCost);
+      
+      // Check if user has enough coins
+      if (userCoinBalance !== null) {
+        const insufficient = userCoinBalance < estimatedCost;
+        console.log('🔍 DEBUG: Coin sufficiency check:', {
+          userCoinBalance,
+          estimatedCost,
+          insufficient
+        });
+        setHasInsufficientCoins(insufficient);
+      }
+    }, 0);
     
-    // Check if user has enough coins
-    if (userCoinBalance !== null) {
-      const insufficient = userCoinBalance < estimatedCost;
-      console.log('🔍 DEBUG: Coin sufficiency check:', {
-        userCoinBalance,
-        estimatedCost,
-        insufficient
-      });
-      setHasInsufficientCoins(insufficient);
-    }
+    return () => clearTimeout(timeoutId);
   }, [videoCount, selectedFormats.length, userCoinBalance, calculateCoinCost]);
 
   useEffect(() => {
@@ -929,11 +971,16 @@ export default function Home() {
   return (
     <main className="min-h-screen py-8 px-4 sm:px-6 bg-gradient-to-b from-white to-gray-50">
       <div className="container max-w-5xl mx-auto space-y-8">
-        {/* Hero Section */}
-        <div className="text-center space-y-4 staggered-fade-in py-8">
+        {/* Hero Section */}        <div className="text-center space-y-4 staggered-fade-in py-8">
           <div className="flex items-center justify-center gap-2 mb-4">
             <div className="h-12 w-12 bg-black rounded-full flex items-center justify-center shadow-lg">
-              <Headphones className="h-6 w-6 text-white" />
+              <Image 
+                src="/logo.svg" 
+                alt="FetchSub Logo" 
+                width={24} 
+                height={24}
+                className="text-white"
+              />
             </div>
             <h1 className="text-3xl font-bold tracking-tight">FetchSub</h1>
           </div>

@@ -21,9 +21,6 @@ import {
   TooltipTrigger,
 } from "./ui/tooltip";
 import { addToDownloadHistory } from "@/app/history/utils";
-import { cacheService } from "@/lib/cache/cache-service";
-import { cacheSubtitleContent, getSubtitleContentFromCache } from "@/lib/cache/subtitle-cache";
-import { trackCacheHit } from "@/lib/cache/cache-utils";
 
 interface Subtitle {
   id: string;
@@ -118,58 +115,25 @@ const ResultsDisplay = ({
       
       // Remove any notice messages that might be in the content
       cleanContent = cleanContent.replace(/\[Note:.*?\]/g, '');
-      
-      // For certain formats, ensure proper newlines and spacing
+        // For certain formats, ensure proper newlines and spacing
       if (subtitle.format === 'SRT' || subtitle.format === 'VTT') {
         // Ensure proper double spacing between subtitle entries
         cleanContent = cleanContent.replace(/\n\n\n+/g, '\n\n');
       }
       
-      // Check cache first
-      const cachedContent = await getSubtitleContentFromCache(subtitle.id);
-      let content;
-      
-      if (cachedContent) {
-        content = cachedContent;
-        // Track cache hit
-        trackCacheHit(true);
-      } else {
-        content = subtitle.content;
-        // Track cache miss
-        trackCacheHit(false);
-        // Content was already cached above
-      }
-      
-      await navigator.clipboard.writeText(content);
+      await navigator.clipboard.writeText(subtitle.content);
       setCopiedId(subtitle.id);
       setTimeout(() => setCopiedId(null), 2000);
     } catch (err) {
       // Silent fail - clipboard access might be restricted
     }
   };
-
   const handleDownload = async (subtitle: Subtitle) => {
     try {
       setDownloadingIds(prev => [...prev, subtitle.id]);
       
-      // Check cache first
-      const cachedContent = await getSubtitleContentFromCache(subtitle.id);
-      let content;
-      
-      if (cachedContent) {
-        content = cachedContent;
-        // Track cache hit
-        trackCacheHit(true);
-      } else {
-        content = subtitle.content;
-        // Track cache miss
-        trackCacheHit(false);
-        // Cache the subtitle content for future use
-        await cacheSubtitleContent(subtitle.id, subtitle.content);
-      }
-      
       // Create a direct download with the exact content already in the UI
-      const blob = new Blob([content], { type: 'text/plain' });
+      const blob = new Blob([subtitle.content], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       
       // Create a direct download from the blob

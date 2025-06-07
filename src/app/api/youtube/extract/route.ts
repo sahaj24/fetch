@@ -106,7 +106,6 @@ async function extractSubtitles(url: string, format: string, language: string): 
     // Check if we have this transcript in cache and it's not expired
     if (transcriptCache[cacheKey] && 
         (now - transcriptCache[cacheKey].timestamp) < CACHE_EXPIRY_MS) {
-      console.log(`Using cached transcript for ${videoId} in ${language}`);
       videoInfo = transcriptCache[cacheKey].videoInfo;
     } else {
       // Not in cache, fetch video info
@@ -127,11 +126,9 @@ async function extractSubtitles(url: string, format: string, language: string): 
     if (transcriptCache[cacheKey] && 
         (now - transcriptCache[cacheKey].timestamp) < CACHE_EXPIRY_MS) {
       // Use cached transcript
-      console.log(`Using cached transcript for ${actualVideoId}`);
       transcript = transcriptCache[cacheKey].transcript;
     } else {
       // Fetch the actual transcript using the youtube-transcript-api
-      console.log(`Cache miss. Fetching transcript for ${actualVideoId} in ${language}`);
       transcript = await fetchTranscript(actualVideoId, language);
       
       // Store in cache for future requests
@@ -140,11 +137,9 @@ async function extractSubtitles(url: string, format: string, language: string): 
         videoInfo,
         timestamp: now
       };
-      console.log(`Cached transcript for ${actualVideoId}`);
     }
     
     // Convert the raw transcript to the requested format
-    console.log(`Formatting transcript to ${format} format`);
     const formattedContent = await formatTranscript(transcript, format, videoInfo.title);
     
     // Calculate file size (approximate)
@@ -169,7 +164,6 @@ async function extractSubtitles(url: string, format: string, language: string): 
       
       // If language-specific error, suggest trying 'auto' or 'en'
       if (language !== 'en' && language !== 'auto') {
-        console.log('Trying fallback to auto-detect language');
         try {
           // Try with auto-detect language as fallback
           const transcript = await fetchTranscript(actualVideoId, 'auto');
@@ -196,7 +190,6 @@ async function extractSubtitles(url: string, format: string, language: string): 
     }
     
     // Only as an absolute last resort, fall back to generated mock subtitles
-    console.log('API extraction failed, falling back to generated subtitles');
     const subtitleData = await generateSubtitles(videoInfo.title, format);
     const generatedContent = subtitleData.content;
     
@@ -535,13 +528,11 @@ async function processYouTubeUrl(
   let videoUrls: string[] = [];
 
   // Handle different URL types
-  console.log(`Processing URL type: ${videoId.includes(':') ? videoId.split(':')[0] : 'single video'}`);
   
   if (videoId.startsWith('playlist:')) {
     // This is a playlist URL - get all video IDs in the playlist
     const playlistId = videoId.replace('playlist:', '');
     try {
-      console.log(`Attempting to fetch videos for playlist ID: ${playlistId}`);
       
       // Validate the playlist ID format
       if (!playlistId || playlistId.length < 5) {
@@ -552,7 +543,6 @@ async function processYouTubeUrl(
       let playlistVideoIds;
       try {
         playlistVideoIds = await getPlaylistVideoIds(playlistId);
-        console.log(`Retrieved ${playlistVideoIds.length} videos from playlist ${playlistId}`);
       } catch (playlistError) {
         console.error('Error in getPlaylistVideoIds:', playlistError);
         throw new Error(`Could not retrieve videos from playlist: ${
@@ -565,7 +555,6 @@ async function processYouTubeUrl(
       }
       
       // Display how many videos were found
-      console.log(`Found ${playlistVideoIds.length} videos in playlist ${playlistId}`);
       
       // Convert video IDs to full URLs
       videoUrls = playlistVideoIds.map(id => `https://www.youtube.com/watch?v=${id}`);
@@ -573,7 +562,6 @@ async function processYouTubeUrl(
       // Limit the number of videos to process
       const originalCount = videoUrls.length;
       if (videoUrls.length > MAX_VIDEOS_PER_BATCH) {
-        console.log(`Limiting playlist to ${MAX_VIDEOS_PER_BATCH} videos out of ${videoUrls.length}`);
         videoUrls = videoUrls.slice(0, MAX_VIDEOS_PER_BATCH);
       }
       
@@ -626,7 +614,6 @@ async function processYouTubeUrl(
       
       // Limit the number of videos to process
       if (videoUrls.length > MAX_VIDEOS_PER_BATCH) {
-        console.log(`Limiting channel videos to ${MAX_VIDEOS_PER_BATCH} videos out of ${videoUrls.length}`);
         videoUrls = videoUrls.slice(0, MAX_VIDEOS_PER_BATCH);
       }
     } catch (error) {
@@ -649,7 +636,6 @@ async function processYouTubeUrl(
   }
 
   // Process each video with concurrency limits to avoid rate limiting
-  console.log(`Processing ${videoUrls.length} videos with ${formats.length} formats each`);
 
   // Create a processing function that handles multiple formats for a single video in parallel
   const processVideo = async (videoUrl: string): Promise<ExtendedSubtitleResult[]> => {
@@ -770,12 +756,10 @@ async function processCSVFile(
 ): Promise<SubtitleResult[]> {
   try {
     // Parse CSV content to extract URLs
-    console.log('Parsing CSV content for YouTube URLs...');
     const parsedResult = await parseCSVContent(csvContent);
     const { urls: videoUrls, stats } = parsedResult;
     
     // Log CSV parsing statistics
-    console.log('CSV Parsing Statistics:', stats);
     
     if (videoUrls.length === 0) {
       return [{ 
@@ -791,14 +775,12 @@ async function processCSVFile(
       }];
     }
     
-    console.log(`Found ${videoUrls.length} YouTube URLs in CSV file (${stats.singleVideoCount} videos, ${stats.playlistCount} playlists, ${stats.channelCount} channels)`);
     
     // Process all URLs without limit
     let processableUrls = videoUrls;
     let skippedUrls = 0; // Always 0 now since there's no limit
     
     // Log the processing intent
-    console.log(`Processing all ${videoUrls.length} videos from CSV file without limit`);
     
     // Process each video with concurrency limits
     const processVideo = async (videoUrl: string): Promise<SubtitleResult[]> => {
@@ -915,7 +897,6 @@ export async function POST(req: NextRequest) {
     
     if (isAnonymousUser) {
       // This is an anonymous user with free coins
-      console.log(`Processing request for anonymous user with ID: ${anonymousId}`);
       // Allow the request to proceed without authentication
       // We'll use the free 15 coins for processing
       userId = anonymousId;
@@ -941,7 +922,6 @@ export async function POST(req: NextRequest) {
       userId = user.id;
     }
     
-    console.log(`YouTube Extraction API called with inputType=${inputType}, userId=${userId || 'undefined'} (from headers)`);
     
     // Validate required parameters
     if (!formats || !language) {
@@ -956,14 +936,12 @@ export async function POST(req: NextRequest) {
     let subtitles = [];
     let processingStats = { totalVideos: 0, processedVideos: 0, errorCount: 0 };    // Process based on input type
     if (inputType === "url" && url) {
-      console.log(`Processing YouTube URL: ${url} with formats: ${formats.join(', ')} in language: ${language}`);
         // For single video URLs, use the requested language
       let actualLanguage = language;
       const videoId = extractVideoId(url);
       
       if (videoId && !videoId.startsWith('playlist:') && !videoId.startsWith('channel:')) {
         // This is a single video - use the requested language directly
-        console.log(`Processing single video with language: ${language}`);
       }
       
       subtitles = await processYouTubeUrl(url, formats, actualLanguage);
@@ -977,9 +955,6 @@ export async function POST(req: NextRequest) {
       // Deduct coins for successfully processed videos
       if (userId && processingStats.processedVideos > 0) {
         try {
-          console.log(`[COIN DEBUG] Attempting coin handling for user ${userId}`);
-          console.log(`[COIN DEBUG] typeof deductCoinsForOperation: ${typeof deductCoinsForOperation}`);
-          console.log(`[COIN DEBUG] Function available: ${!!deductCoinsForOperation}`);
           
           // Get coin cost from the payload if available, otherwise calculate it
           let cost = 0;
@@ -987,7 +962,6 @@ export async function POST(req: NextRequest) {
           // Use the provided estimate if available instead of recalculating
           if (body.coinCostEstimate && typeof body.coinCostEstimate === 'number') {
             cost = body.coinCostEstimate;
-            console.log(`Using provided cost estimate: ${cost} coins`);
           } else {
             // Calculate cost based on type and count
             if (inputType === "url") {
@@ -1005,18 +979,15 @@ export async function POST(req: NextRequest) {
             
             // Ensure minimum cost is 1 coin
             cost = Math.max(cost, 1);
-            console.log(`Cost = ${cost} coins`);
           }
           
           // Check if this is an anonymous user with free coins
           const isAnonymousUser = userId?.startsWith('anonymous-');
 
           if (isAnonymousUser) {
-            console.log(`Anonymous user ${userId} - not deducting coins`);
             // Continue processing without coin deduction for anonymous users
           } else {
             // For authenticated users, use the deductCoinsForOperation utility
-            console.log(`Deducting ${cost} coins for authenticated user ${userId}`);
             // Use a valid OperationType from the defined type
             const operationType = inputType === "url" ? "EXTRACT_SUBTITLES" : "BATCH_EXTRACT";
             const deductionSuccess = await deductCoinsForOperation(userId, operationType, cost);
@@ -1032,7 +1003,6 @@ export async function POST(req: NextRequest) {
               );
             }
             
-            console.log(`✅ Successfully deducted ${cost} coins from user ${userId}`);
           }        } catch (deductError) {
             console.error(`Error in coin handling for user ${userId}:`, deductError);
             // Return error response - don't continue processing if coin deduction fails
@@ -1049,7 +1019,6 @@ export async function POST(req: NextRequest) {
       }
     } else if (inputType === "file" && csvContent) {
       try {
-        console.log(`Processing CSV file with formats: ${formats.join(', ')} in language: ${language}`);
         // Make sure the CSV content is a proper string
         if (typeof csvContent !== 'string' || !csvContent.trim()) {
           throw new Error("Empty or invalid CSV content");
@@ -1084,7 +1053,6 @@ export async function POST(req: NextRequest) {
         // Deduct coins for successfully processed videos
         if (userId && processingStats.processedVideos > 0) {
           try {
-            console.log(`Attempting coin deduction for CSV processing for user ${userId}`);
             
             // Calculate cost for this operation
             let cost = 0;
@@ -1097,13 +1065,11 @@ export async function POST(req: NextRequest) {
             
             // Minimum cost is 1 coin
             cost = Math.max(cost, 1);
-            console.log(`CSV processing cost = ${cost} coins`);
             
             // Use the new utility function to deduct coins
             const success = await deductCoinsForOperation(userId, 'BATCH_EXTRACT', cost);
             
             if (success) {
-              console.log(`✅ Coin deduction successful: ${cost} coins deducted for CSV processing`);
             } else {
               console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
               return NextResponse.json(
@@ -1148,7 +1114,6 @@ export async function POST(req: NextRequest) {
 
     // Calculate processing time
     const processingTime = Date.now() - startTime;
-    console.log(`Processing completed in ${processingTime}ms. Processed ${processingStats.processedVideos} videos with ${processingStats.errorCount} errors.`);
 
     // For very large responses, we could use streaming, but for now we'll return the full response
     if (subtitles.length > 500) {
@@ -1195,7 +1160,6 @@ export async function GET(request: NextRequest) {
 
     try {
       // Try to fetch actual transcript data
-      console.log(`Attempting to fetch transcript for ${videoId} in language ${language}`);
       const transcript = await fetchTranscript(videoId, language);
       
       // Create the content based on the format requested

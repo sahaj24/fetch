@@ -111,11 +111,9 @@ async function processLanguageDetection(url: string) {
   // Check cache first for instant results
   const cachedResult = getCachedResult(videoId);
   if (cachedResult) {
-    console.log(`Using cached language data for video: ${videoId}`);
     return NextResponse.json(cachedResult);
   }
 
-  console.log(`Detecting available languages for video: ${videoId}`);
 
   // Provide common languages since we can't detect them without the missing functions
   const availableLanguages: AvailableLanguage[] = [
@@ -134,7 +132,6 @@ async function processLanguageDetection(url: string) {
   ];
   const defaultLanguage = 'auto';
 
-  console.log(`Providing ${availableLanguages.length} common languages for ${videoId}, default: ${defaultLanguage}`);
 
   const result = {
     videoId: videoId,

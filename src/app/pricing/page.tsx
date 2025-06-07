@@ -180,7 +180,6 @@ export default function Page() {
     }
 
     try {
-      console.log(`PayPal SDK loaded, initializing button for ${selectedPlan} plan...`);
 
       // Clear any existing buttons in the container
       buttonContainer.innerHTML = '';
@@ -192,7 +191,6 @@ export default function Page() {
 
       // In debug mode, show a message about the plan ID
       if (DEBUG_MODE) {
-        console.log(`Using plan ID: ${planId} for ${selectedPlan} plan`);
       }
       
       const buttons = window.paypal.Buttons({
@@ -206,7 +204,6 @@ export default function Page() {
           tagline: false,
         },
         createSubscription: (data: any, actions: any) => {
-          console.log(`Creating ${selectedPlan} subscription with plan ID: ${planId}`);
           
           return actions.subscription.create({
             plan_id: planId,
@@ -217,7 +214,6 @@ export default function Page() {
           });
         },
         onApprove: async (data: any, actions: any) => {
-          console.log('Subscription approved:', data);
           setSubscriptionId(data.subscriptionID);
           
           // Get the current user
@@ -233,7 +229,6 @@ export default function Page() {
             );
             
             if (success) {
-              console.log(`Successfully added ${selectedPlanDetails.monthlyCoins} coins to user ${userId}`);
               
               // Get the updated coin balance to display to the user
               const { data: userData } = await supabase
@@ -271,7 +266,6 @@ export default function Page() {
           }
         },
         onCancel: (data: any) => {
-          console.log("Subscription cancelled:", data);
           setSelectedPlan(null);
         },
       });
@@ -597,7 +591,6 @@ export default function Page() {
         data-sdk-integration-source="button-factory"
         strategy="lazyOnload"
         onLoad={() => {
-          console.log("PayPal SDK loaded successfully");
           setPaypalLoaded(true);
         }}
         onError={(e) => {

@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
   try {
     // Get user ID from headers
     const userId = request.headers.get('x-user-id');
-    console.log("🔵 Direct Deduct API: Received request with user ID:", userId);
     
     if (!userId) {
       console.error("🔴 Direct Deduct API: Missing user ID in headers");
@@ -32,7 +31,6 @@ export async function POST(request: NextRequest) {
       description = 'Service charge'
     } = body;
     
-    console.log(`🔵 Direct Deduct API: Processing ${amount} coin deduction for user ${userId}`);
     
     // First, we need to get the user record to ensure we have a valid Supabase UUID
     // The userId from headers might be a Firebase-style ID and not a valid Postgres UUID
@@ -126,7 +124,6 @@ export async function POST(request: NextRequest) {
       }
       
       // Success - return the updated balance
-      console.log(`🟢 Successfully deducted ${amount} coins. New balance: ${newBalance}`);
       
       return NextResponse.json({
         success: true,

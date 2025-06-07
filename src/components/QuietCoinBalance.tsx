@@ -84,7 +84,6 @@ export function QuietCoinBalance() {
       const handleCoinChange = (event: any) => {
         if (event.detail && typeof event.detail.balance === 'number') {
           setAnonymousBalance(event.detail.balance);
-          console.log('📊 Anonymous coin balance updated from event:', event.detail.balance);
         }
       };
       
@@ -92,7 +91,6 @@ export function QuietCoinBalance() {
       const handleCoinRefresh = () => {
         const currentCoins = getAnonymousCoins();
         setAnonymousBalance(currentCoins);
-        console.log('🔄 Anonymous coin balance refreshed from localStorage:', currentCoins);
       };
 
       // Add event listeners
