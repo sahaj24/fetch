@@ -242,22 +242,43 @@ async function extractSubtitles(url: string, format: string, language: string): 
     
     const cacheKey = `${actualVideoId}-${language}`;
     const now = Date.now();
-    
-    // Handle the new classified error types from the optimized fetchTranscript function
+      // Handle the new classified error types from the optimized fetchTranscript function
     if (error.message?.startsWith('SUBTITLES_DISABLED:')) {
       // Cache this failure to avoid repeated requests
       negativeCache[cacheKey] = {
         reason: 'SUBTITLES_DISABLED',
         timestamp: now
       };
-      // This is a confirmed case where creator has disabled subtitles
-      throw new Error(`Creator has disabled subtitles for this video: ${videoInfo.title}`);
+      // Return an informative error result instead of throwing
+      return {
+        id: `subtitles-disabled-${actualVideoId}-${format}-${language}`,
+        videoTitle: videoInfo.title,
+        language: getLanguageName(language),
+        format,
+        fileSize: '0KB',
+        content: `Subtitles are not available for this video. The creator "${videoInfo.title}" has disabled captions.`,
+        url,
+        downloadUrl: '',
+        error: `Creator has disabled subtitles for this video: ${videoInfo.title}`,
+        notice: 'Subtitles disabled by creator'
+      };
     }
     
     if (error.message?.startsWith('TIMEOUT:')) {
       // Don't cache timeout errors as they might be temporary
-      // This is a timeout error - suggest retry
-      throw new Error(`Video processing timed out. This may be a temporary issue - please try again in a few moments.`);
+      // Return a timeout error result instead of throwing
+      return {
+        id: `timeout-${actualVideoId}-${format}-${language}`,
+        videoTitle: videoInfo.title,
+        language: getLanguageName(language),
+        format,
+        fileSize: '0KB',
+        content: `Video processing timed out. This may be a temporary network issue - please try again in a few moments.`,
+        url,
+        downloadUrl: '',
+        error: `Video processing timed out. This may be a temporary issue - please try again in a few moments.`,
+        notice: 'Processing timeout - please retry'
+      };
     }
     
     if (error.message?.startsWith('UNAVAILABLE:')) {
@@ -266,10 +287,20 @@ async function extractSubtitles(url: string, format: string, language: string): 
         reason: 'UNAVAILABLE',
         timestamp: now
       };
-      // Video is private or unavailable
-      throw new Error(`This video is private or unavailable and cannot be processed.`);
-    }    
-    // For old-style error messages that don't have our new classification
+      // Return an unavailable error result instead of throwing
+      return {
+        id: `unavailable-${actualVideoId}-${format}-${language}`,
+        videoTitle: videoInfo.title,
+        language: getLanguageName(language),
+        format,
+        fileSize: '0KB',
+        content: `This video is private or unavailable and cannot be processed.`,
+        url,
+        downloadUrl: '',
+        error: `This video is private or unavailable and cannot be processed.`,
+        notice: 'Video unavailable'
+      };
+    }    // For old-style error messages that don't have our new classification
     if (error.message?.includes("Could not find any transcripts") || 
         error.message?.includes("No transcript available")) {
       
@@ -278,11 +309,34 @@ async function extractSubtitles(url: string, format: string, language: string): 
         reason: 'SUBTITLES_DISABLED',
         timestamp: now
       };
-      // If everything fails, inform the user that no transcripts are available
-      throw new Error(`No subtitles are available for this video: ${videoInfo.title}. The creator may have disabled captions.`);
+      // Return an informative error result instead of throwing
+      return {
+        id: `no-transcripts-${actualVideoId}-${format}-${language}`,
+        videoTitle: videoInfo.title,
+        language: getLanguageName(language),
+        format,
+        fileSize: '0KB',
+        content: `No subtitles are available for this video: ${videoInfo.title}. The creator may have disabled captions.`,
+        url,
+        downloadUrl: '',
+        error: `No subtitles are available for this video: ${videoInfo.title}. The creator may have disabled captions.`,
+        notice: 'No subtitles available'
+      };
     }
-      // For unknown errors, provide better messaging but don't generate fake subtitles
-    throw new Error(`Failed to extract subtitles from video: ${videoInfo.title}. Error: ${error.message}`);
+    
+    // For unknown errors, return an error result instead of throwing
+    return {
+      id: `error-${actualVideoId}-${format}-${language}`,
+      videoTitle: videoInfo.title,
+      language: getLanguageName(language),
+      format,
+      fileSize: '0KB',
+      content: `Failed to extract subtitles from video: ${videoInfo.title}. Error: ${error.message}`,
+      url,
+      downloadUrl: '',
+      error: `Failed to extract subtitles from video: ${videoInfo.title}. Error: ${error.message}`,
+      notice: 'Processing failed'
+    };
   }
 }
 
