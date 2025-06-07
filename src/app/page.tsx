@@ -116,14 +116,17 @@ export default function Home() {
       const savedProcessingState = localStorage.getItem(STORAGE_KEYS.processingState);
       const savedSubtitles = localStorage.getItem(STORAGE_KEYS.subtitles);
       const savedHasResults = localStorage.getItem(STORAGE_KEYS.hasResults);
-      const savedFormats = localStorage.getItem(STORAGE_KEYS.selectedFormats);
-      const savedLanguage = localStorage.getItem(STORAGE_KEYS.selectedLanguage);console.log('📦 Found in localStorage:', {
+      const savedFormats = localStorage.getItem(STORAGE_KEYS.selectedFormats);      const savedLanguage = localStorage.getItem(STORAGE_KEYS.selectedLanguage);
+
+      console.log('📦 Found in localStorage:', {
         savedTab,
         savedHasResults,
         savedSubtitles: savedSubtitles ? `${savedSubtitles.length} chars` : 'null',
         savedFormats,
         savedLanguage
-      });      // STEP 1: First check what needs to be restored
+      });
+
+      // STEP 1: First check what needs to be restored
       let savedSubtitlesData = null;
       if (savedHasResults) {
         const hasResultsValue = JSON.parse(savedHasResults);
@@ -150,9 +153,10 @@ export default function Home() {
           setIsProcessing(processingState.isProcessing);
           setProgress(processingState.progress || 0);
           setProcessedVideos(processingState.processedVideos || 0);
-          setTotalVideos(processingState.totalVideos || 0);
-        }
-      }      // STEP 3: Finally restore activeTab based on all the restored state
+          setTotalVideos(processingState.totalVideos || 0);        }
+      }
+
+      // STEP 3: Finally restore activeTab based on all the restored state
       // Use startTransition to batch state updates and ensure hasResults is set before activeTab
       if (savedTab && (savedTab === 'processing' || savedTab === 'results')) {
         // Only restore results tab if we actually have results
@@ -196,7 +200,9 @@ export default function Home() {
       if (savedLanguage) {
         console.log('🌐 Restoring language:', savedLanguage);
         setSelectedLanguage(savedLanguage);
-      }      console.log('✅ State restoration complete');
+      }
+
+      console.log('✅ State restoration complete');
     } catch (error) {
       console.error('❌ Error restoring state from localStorage:', error);
     }
@@ -239,18 +245,20 @@ export default function Home() {
     console.log(`🔄 Tab change requested: ${activeTab} -> ${newTab}`);
     setActiveTab(newTab);
     
-    // If user manually navigates to input tab and there's no active processing,
-    // clear the saved state to start fresh
-    if (newTab === 'input' && !isProcessing) {
-      console.log('🧹 Clearing saved state (user navigated to input)');
+    // Only clear state if user manually navigates to input tab AND there are no results
+    // This prevents clearing state when processing just completed but isProcessing became false
+    if (newTab === 'input' && !isProcessing && !hasResults && subtitles.length === 0) {
+      console.log('🧹 Clearing saved state (user navigated to input, no results)');
       clearSavedState();
       setHasResults(false);
       setSubtitles([]);
       setProgress(0);
       setProcessedVideos(0);
       setTotalVideos(0);
+    } else if (newTab === 'input' && (hasResults || subtitles.length > 0)) {
+      console.log('⚠️ User navigated to input but we have results - not clearing state');
     }
-  }, [isProcessing, clearSavedState]);
+  }, [isProcessing, hasResults, subtitles.length, clearSavedState]);
 
   // Helper function to format time as mm:ss
   const formatTimeRemaining = (seconds: number): string => {
@@ -517,22 +525,21 @@ export default function Home() {
       if (extractedSubtitles && extractedSubtitles.length > 0) {
         console.log('🎉 Processing complete with results, updating state...');
         
-        // Use startTransition to ensure proper state batching when setting results
+        // Use startTransition to batch all state updates together
+        // This ensures hasResults and subtitles are set before activeTab changes
         startTransition(() => {
+          // Set results first to ensure they're available before tab switch
           setProgress(100);
           setHasResults(true);
           setSubtitles(extractedSubtitles);
           setActiveTab("results");
         });
         
-        console.log('🎯 Switched to results tab, saving state...');
-        
-        // Save the successful state immediately and with delay for redundancy
-        saveState();
+        // Save state immediately after setting results
+        console.log('💾 Saving state after successful processing');
         setTimeout(() => {
-          console.log('⏰ Delayed state save executing...');
           saveState();
-        }, 100);
+        }, 10);
         
         // Also force save directly to localStorage as backup
         try {
