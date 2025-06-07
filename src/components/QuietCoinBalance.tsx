@@ -55,13 +55,53 @@ export function QuietCoinBalance() {
   // Use the global coin store with Zustand
   const { userCoins, refreshCoins } = useCoinStore();
   
+  // Prevent hydration mismatches
+  const [mounted, setMounted] = useState(false);
+  
   // Keep previous balance for smooth transitions
   const [prevBalance, setPrevBalance] = useState<number>(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const firstLoadRef = useRef(true);
   
+  // For non-logged in users, show actual anonymous coin count from localStorage
+  // Otherwise use the user's actual balance or previous state
+  const [anonymousBalance, setAnonymousBalance] = useState(15);
+
+  // Set mounted state after component mounts to prevent hydration issues
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Initialize and listen for changes to anonymous coins
+  useEffect(() => {
+    if (!mounted) return; // Don't access localStorage until mounted
+    
+    // Only set up listeners if not logged in
+    if (!isLoggedIn) {
+      // Initialize anonymous balance
+      setAnonymousBalance(getAnonymousCoins());
+
+      // Listen for coin change events
+      const handleCoinChange = (event: any) => {
+        if (event.detail && typeof event.detail.balance === 'number') {
+          setAnonymousBalance(event.detail.balance);
+        }
+      };
+
+      // Add event listener
+      window.addEventListener('anonymousCoinChange', handleCoinChange);
+
+      // Clean up
+      return () => {
+        window.removeEventListener('anonymousCoinChange', handleCoinChange);
+      };
+    }
+  }, [isLoggedIn, mounted]);
+  
   // Real-time update handling
   useEffect(() => {
+    if (!mounted) return; // Don't set up auth listeners until mounted
+    
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
@@ -100,7 +140,7 @@ export function QuietCoinBalance() {
       subscription.unsubscribe();
       clearInterval(quietRefreshTimer);
     };
-  }, [refreshCoins, isLoggedIn]);
+  }, [refreshCoins, isLoggedIn, mounted]);
   
   // Smooth visual transition when balance changes
   useEffect(() => {
@@ -108,40 +148,25 @@ export function QuietCoinBalance() {
       // Only update previous balance when we have a valid new balance
       setPrevBalance(userCoins.balance);
     }
-  }, [userCoins?.balance]);
-  
-  // For non-logged in users, show actual anonymous coin count from localStorage
-  // Otherwise use the user's actual balance or previous state
-  const [anonymousBalance, setAnonymousBalance] = useState(15);
-
-  // Initialize and listen for changes to anonymous coins
-  useEffect(() => {
-    // Only set up listeners if not logged in
-    if (!isLoggedIn) {
-      // Initialize anonymous balance
-      setAnonymousBalance(getAnonymousCoins());
-
-      // Listen for coin change events
-      const handleCoinChange = (event: any) => {
-        if (event.detail && typeof event.detail.balance === 'number') {
-          setAnonymousBalance(event.detail.balance);
-        }
-      };
-
-      // Add event listener
-      window.addEventListener('anonymousCoinChange', handleCoinChange);
-
-      // Clean up
-      return () => {
-        window.removeEventListener('anonymousCoinChange', handleCoinChange);
-      };
-    }
-  }, [isLoggedIn]);
-  
+  }, [userCoins?.balance]);  
   // Get balance based on auth state
-  const displayBalance = !isLoggedIn 
-    ? anonymousBalance // Use tracked anonymous coins
-    : (userCoins?.balance ?? prevBalance ?? 0);
+  const displayBalance = !mounted 
+    ? 15 // Default value during SSR/hydration
+    : !isLoggedIn 
+      ? anonymousBalance // Use tracked anonymous coins
+      : (userCoins?.balance ?? prevBalance ?? 0);
+  
+  // Don't render until mounted to prevent hydration mismatches
+  if (!mounted) {
+    return (
+      <div className="flex items-center h-9 px-3 rounded-md">
+        <span className="flex items-center gap-1">
+          <Coins className="h-4 w-4" />
+          <span className="text-sm">15 🪙</span>
+        </span>
+      </div>
+    );
+  }
   
   return (
     <TooltipProvider>
