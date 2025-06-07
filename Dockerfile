@@ -47,9 +47,15 @@ RUN apt-get update && apt-get install -y \
     lsb-release \
     wget \
     xdg-utils \
+    ffmpeg \
     && ln -sf python3 /usr/bin/python \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Install yt-dlp (CRITICAL for YouTube transcript extraction)
+RUN python3 -m pip install --upgrade pip \
+    && pip3 install yt-dlp \
+    && yt-dlp --version
 
 # Copy all files first
 COPY . .
