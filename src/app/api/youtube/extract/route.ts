@@ -13,10 +13,7 @@ import {
   processBatchWithConcurrency,
   SubtitleResult,
   TranscriptItem,
-  getLanguageName,
-  getAvailableLanguages,
-  getVideoDefaultLanguage,
-  AvailableLanguage
+  getLanguageName
 } from "./utils";
 import { OPERATION_COSTS } from "@/app/coins/utils";
 import { supabase } from "@/supabase/config";
@@ -960,22 +957,13 @@ export async function POST(req: NextRequest) {
     let processingStats = { totalVideos: 0, processedVideos: 0, errorCount: 0 };    // Process based on input type
     if (inputType === "url" && url) {
       console.log(`Processing YouTube URL: ${url} with formats: ${formats.join(', ')} in language: ${language}`);
-      
-      // For single video URLs, try to use detected default language if available
+        // For single video URLs, use the requested language
       let actualLanguage = language;
       const videoId = extractVideoId(url);
       
       if (videoId && !videoId.startsWith('playlist:') && !videoId.startsWith('channel:')) {
-        // This is a single video - try to get the default language
-        try {
-          const defaultLanguage = await getVideoDefaultLanguage(videoId);
-          if (defaultLanguage && defaultLanguage !== 'en') {
-            console.log(`Using detected default language: ${defaultLanguage} instead of requested: ${language}`);
-            actualLanguage = defaultLanguage;
-          }
-        } catch (error) {
-          console.log(`Could not detect default language for ${videoId}, using requested: ${language}`);
-        }
+        // This is a single video - use the requested language directly
+        console.log(`Processing single video with language: ${language}`);
       }
       
       subtitles = await processYouTubeUrl(url, formats, actualLanguage);

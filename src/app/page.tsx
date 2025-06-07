@@ -39,7 +39,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("input");
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState(0);
-  const [hasResults, setHasResults] = useState(false);  const [selectedFormats, setSelectedFormats] = useState<string[]>(DEFAULT_FORMATS);
+  const [hasResults, setHasResults] = useState(false);
+  const [selectedFormats, setSelectedFormats] = useState<string[]>(DEFAULT_FORMATS);
   const [selectedLanguage, setSelectedLanguage] = useState("en");
 
   const [processedVideos, setProcessedVideos] = useState(0);
@@ -58,13 +59,142 @@ export default function Home() {
   const [userCoinBalance, setUserCoinBalance] = useState<number | null>(null);
   const [isLoadingCoins, setIsLoadingCoins] = useState(false);
   const [hasInsufficientCoins, setHasInsufficientCoins] = useState(false);
-
   // For tracking current input data from InputSection
   const [currentInputData, setCurrentInputData] = useState<{
     inputType: "url" | "file";
     url?: string;
     file?: File;
-    csvContent?: string;  } | null>(null);
+    csvContent?: string;
+  } | null>(null);
+
+  // State persistence keys for localStorage
+  const STORAGE_KEYS = {
+    activeTab: 'fetchsub_activeTab',
+    processingState: 'fetchsub_processingState',
+    subtitles: 'fetchsub_subtitles',
+    hasResults: 'fetchsub_hasResults',
+    selectedFormats: 'fetchsub_selectedFormats',
+    selectedLanguage: 'fetchsub_selectedLanguage'
+  };
+
+  // Function to save state to localStorage
+  const saveState = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      localStorage.setItem(STORAGE_KEYS.activeTab, activeTab);
+      localStorage.setItem(STORAGE_KEYS.processingState, JSON.stringify({
+        isProcessing,
+        progress,
+        processedVideos,
+        totalVideos
+      }));
+      localStorage.setItem(STORAGE_KEYS.subtitles, JSON.stringify(subtitles));
+      localStorage.setItem(STORAGE_KEYS.hasResults, JSON.stringify(hasResults));
+      localStorage.setItem(STORAGE_KEYS.selectedFormats, JSON.stringify(selectedFormats));
+      localStorage.setItem(STORAGE_KEYS.selectedLanguage, selectedLanguage);
+    } catch (error) {
+      console.error('Error saving state to localStorage:', error);
+    }
+  }, [activeTab, isProcessing, progress, processedVideos, totalVideos, subtitles, hasResults, selectedFormats, selectedLanguage]);
+
+  // Function to restore state from localStorage
+  const restoreState = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      const savedTab = localStorage.getItem(STORAGE_KEYS.activeTab);
+      const savedProcessingState = localStorage.getItem(STORAGE_KEYS.processingState);
+      const savedSubtitles = localStorage.getItem(STORAGE_KEYS.subtitles);
+      const savedHasResults = localStorage.getItem(STORAGE_KEYS.hasResults);
+      const savedFormats = localStorage.getItem(STORAGE_KEYS.selectedFormats);
+      const savedLanguage = localStorage.getItem(STORAGE_KEYS.selectedLanguage);
+
+      if (savedTab && (savedTab === 'processing' || savedTab === 'results')) {
+        setActiveTab(savedTab);
+      }
+
+      if (savedProcessingState) {
+        const processingState = JSON.parse(savedProcessingState);
+        if (processingState.isProcessing) {
+          setIsProcessing(processingState.isProcessing);
+          setProgress(processingState.progress || 0);
+          setProcessedVideos(processingState.processedVideos || 0);
+          setTotalVideos(processingState.totalVideos || 0);
+        }
+      }
+
+      if (savedSubtitles) {
+        const parsedSubtitles = JSON.parse(savedSubtitles);
+        if (Array.isArray(parsedSubtitles) && parsedSubtitles.length > 0) {
+          setSubtitles(parsedSubtitles);
+        }
+      }
+
+      if (savedHasResults) {
+        const hasResultsValue = JSON.parse(savedHasResults);
+        if (hasResultsValue) {
+          setHasResults(true);
+          // If we have results, switch to results tab
+          setActiveTab('results');
+        }
+      }
+
+      if (savedFormats) {
+        const parsedFormats = JSON.parse(savedFormats);
+        if (Array.isArray(parsedFormats) && parsedFormats.length > 0) {
+          setSelectedFormats(parsedFormats);
+        }
+      }
+
+      if (savedLanguage) {
+        setSelectedLanguage(savedLanguage);
+      }
+    } catch (error) {
+      console.error('Error restoring state from localStorage:', error);
+    }
+  }, []);
+
+  // Function to clear saved state
+  const clearSavedState = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    
+    try {
+      Object.values(STORAGE_KEYS).forEach(key => {
+        localStorage.removeItem(key);
+      });
+    } catch (error) {
+      console.error('Error clearing saved state:', error);
+    }
+  }, []);
+
+  // Restore state on component mount
+  useEffect(() => {
+    restoreState();
+  }, [restoreState]);
+
+  // Save state whenever important state changes
+  useEffect(() => {
+    // Only save state if we're in processing or results tab, or have results
+    if (activeTab === 'processing' || activeTab === 'results' || hasResults || subtitles.length > 0) {
+      saveState();
+    }
+  }, [activeTab, isProcessing, progress, processedVideos, totalVideos, subtitles, hasResults, saveState]);
+  // Handle tab changes with state management
+  const handleTabChange = useCallback((newTab: string) => {
+    setActiveTab(newTab);
+    
+    // If user manually navigates to input tab and there's no active processing,
+    // clear the saved state to start fresh
+    if (newTab === 'input' && !isProcessing) {
+      clearSavedState();
+      setHasResults(false);
+      setSubtitles([]);
+      setProgress(0);
+      setProcessedVideos(0);
+      setTotalVideos(0);
+    }
+  }, [isProcessing, clearSavedState]);
 
   // Helper function to format time as mm:ss
   const formatTimeRemaining = (seconds: number): string => {
@@ -187,8 +317,7 @@ export default function Home() {
       });
     }
   };
-  
-  // Function to process the actual API request
+    // Function to process the actual API request
   const processRequest = async (payload: any) => {
     setIsProcessing(true);
     setActiveTab("processing");
@@ -198,7 +327,10 @@ export default function Home() {
     setTotalVideos(payload.videoCount || 0);
     setProcessedVideos(0);
     setEstimatedTimeRemaining("--:--");
-  
+
+    // Save state before processing in case auth redirect is needed
+    saveState();
+
     // Start progress simulation with time estimation
     const progressInterval = startSimulatedProgress();
   
@@ -326,14 +458,16 @@ export default function Home() {
       setProcessedVideos(
         Math.ceil(extractedSubtitles.length / selectedFormats.length) || payload.videoCount || 0,
       );
-      
-      // Only proceed if we have actual results
+        // Only proceed if we have actual results
       if (extractedSubtitles && extractedSubtitles.length > 0) {
         // Set results first to ensure they're visible
         setProgress(100);
         setSubtitles(extractedSubtitles);
         setHasResults(true);
         setActiveTab("results"); // Ensure this is called immediately
+        
+        // Save the successful state
+        setTimeout(saveState, 100);
         
         // FIX: Remove redundant coin deduction since the extraction API already handles this
         // This was causing a double deduction - once in the API and once here
@@ -371,7 +505,7 @@ export default function Home() {
             duration: 3000,
           });
         }
-      } else {        // No subtitles found
+      } else {// No subtitles found
         // console.warn("[WARNING] No subtitles found in the response");
         toast.error("No Results: No subtitles were found for the provided video(s).", {
           duration: 5000
@@ -677,10 +811,9 @@ export default function Home() {
               Batch download subtitles by providing playlist URLs, channel URLs, or CSV files with video links
             </CardDescription>
           </CardHeader>
-          <CardContent className="p-6">
-            <Tabs
+          <CardContent className="p-6">            <Tabs
               value={activeTab}
-              onValueChange={setActiveTab}
+              onValueChange={handleTabChange}
               className="w-full"
             >
               <TabsList className="grid w-full grid-cols-3 mb-1 p-1 bg-muted rounded-lg">
