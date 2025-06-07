@@ -97,7 +97,7 @@ export async function getVideoInfo(videoId: string): Promise<{ title: string; du
   // Method 1: Direct HTTP request to YouTube's oEmbed API (most reliable)
   try {
     const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
-    const response = await axios.get(oembedUrl, { timeout: 5000 });
+    const response = await axios.get(oembedUrl, { timeout: 30000 });
     
     if (response.data && response.data.title) {
       return {
@@ -108,11 +108,10 @@ export async function getVideoInfo(videoId: string): Promise<{ title: string; du
   } catch (oembedError) {
     // console.error(`oEmbed API request failed: ${oembedError}`);
   }
-
   // Method 2: Try to use yt-dlp (fallback)
   try {
     const cmd = `yt-dlp --no-warnings --skip-download --print title -- ${videoId}`;
-    const { stdout } = await execPromise(cmd, { timeout: 10000 });
+    const { stdout } = await execPromise(cmd);
     
     if (stdout && stdout.trim()) {
       return {
@@ -128,7 +127,7 @@ export async function getVideoInfo(videoId: string): Promise<{ title: string; du
   try {
     // Use a public no-auth required endpoint that gives basic video info
     const metadataUrl = `https://noembed.com/embed?url=https://www.youtube.com/watch?v=${videoId}`;
-    const metaResponse = await axios.get(metadataUrl, { timeout: 5000 });
+    const metaResponse = await axios.get(metadataUrl, { timeout: 30000 });
     
     if (metaResponse.data && metaResponse.data.title) {
       return {
@@ -169,22 +168,14 @@ export async function fetchTranscript(videoId: string, language: string = 'en'):
     
     // Create a temporary directory for subtitle files
     const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fetchsub-'));
-    const subtitlePath = path.join(tempDir, 'subtitle');
-      try {      // Try auto-generated subtitles directly with aggressive flags for speed
-      const autoSubCommand = `yt-dlp --no-warnings --skip-download --write-auto-sub --sub-format vtt --no-playlist --no-check-certificate --prefer-insecure --socket-timeout 10 --output "${subtitlePath}" -- ${videoId}`;
+    const subtitlePath = path.join(tempDir, 'subtitle');      try {      // Try auto-generated subtitles directly with aggressive flags for speed
+      const autoSubCommand = `yt-dlp --no-warnings --skip-download --write-auto-sub --sub-format vtt --no-playlist --no-check-certificate --prefer-insecure --output "${subtitlePath}" -- ${videoId}`;
       
-      // Use Promise.race for better timeout control with a shorter timeout
-      const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('TIMEOUT: Operation timed out after 8 seconds')), 8000);
-      });
-      
-      const ytdlpPromise = execPromise(autoSubCommand, { timeout: 8000 });
-      
-      // Race between the command execution and timeout
-      await Promise.race([ytdlpPromise, timeoutPromise]);
+      // Execute yt-dlp command without timeout limits to allow longer processing
+      await execPromise(autoSubCommand);
       
       // Find and parse VTT files
-      const vttFiles = fs.readdirSync(tempDir).filter(file => file.endsWith('.vtt'));
+      const vttFiles = fs.readdirSync(tempDir).filter((file: string) => file.endsWith('.vtt'));
       
       if (vttFiles.length > 0) {
         const vttFilePath = path.join(tempDir, vttFiles[0]);
@@ -203,10 +194,9 @@ export async function fetchTranscript(videoId: string, language: string = 'en'):
     }  } catch (error: any) {
     // Implement classified error types for better error handling
     console.error(`Failed to fetch transcript for ${videoId}: ${error.message}`);
-    
-    // Classify the error based on error message and type
+      // Classify the error based on error message and type
     if (error.code === 'TIMEOUT' || error.message?.includes('timeout') || error.message?.includes('timed out')) {
-      throw new Error(`TIMEOUT: Video processing timed out after 8 seconds. This may be a temporary network issue.`);
+      throw new Error(`TIMEOUT: Video processing timed out. This may be a temporary network issue.`);
     }
     
     if (error.message?.includes('Private video') || error.message?.includes('This video is unavailable')) {
@@ -246,10 +236,9 @@ async function parseVttContentAsync(vttContent: string): Promise<TranscriptItem[
   for (; i < lines.length; i++) {
     const line = lines[i].trim();
     processedLines++;
-    
-    // Yield control to event loop every 100 lines
+      // Yield control to event loop every 100 lines
     if (processedLines % 100 === 0) {
-      await new Promise(resolve => setImmediate(resolve));
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
     
     // Time line (start --> end)
@@ -319,10 +308,9 @@ async function parseVttContentAsync(vttContent: string): Promise<TranscriptItem[
   const deduplicatedTranscript = [];
   const seenTexts = new Set();
   
-  for (let j = 0; j < transcript.length; j++) {
-    // Yield control periodically during deduplication too
+  for (let j = 0; j < transcript.length; j++) {    // Yield control periodically during deduplication too
     if (j % 100 === 0 && j > 0) {
-      await new Promise(resolve => setImmediate(resolve));
+      await new Promise(resolve => setTimeout(resolve, 0));
     }
     
     const item = transcript[j];
@@ -723,7 +711,7 @@ export async function getPlaylistVideoIds(playlistId: string): Promise<string[]>
     }
     
     try {
-      const response = await axios.get(youtubeApiUrl, { timeout: 10000 });
+      const response = await axios.get(youtubeApiUrl, { timeout: 60000 });
       const data = response.data;
       
       if (data && data.items && data.items.length > 0) {
@@ -769,7 +757,7 @@ async function getPlaylistVideoIdsWithWebFetch(playlistId: string): Promise<stri
         'Accept-Language': 'en-US,en;q=0.9',
         'Accept': 'text/html,application/xhtml+xml,application/xml'
       },
-      timeout: 15000
+      timeout: 60000
     });
     
     const html = response.data;
@@ -844,7 +832,7 @@ export async function getChannelVideoIds(channelId: string): Promise<string[]> {
     const { stdout } = await execPromise(cmd);
     
     // Parse the output to get video IDs
-    const videoIds = stdout.trim().split('\n').filter(id => id.length === 11);
+    const videoIds = stdout.trim().split('\n').filter((id: string) => id.length === 11);
     return videoIds;
   } catch (error) {
     // console.error(`Error getting channel videos: ${error}`);
