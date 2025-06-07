@@ -317,6 +317,14 @@ export async function addSubscriptionCoins(userId: string, planName: string, coi
 
     // Record the transaction
     const transactionId = `subscription_${Date.now()}`;
+    console.log('Recording subscription transaction:', {
+      userId,
+      transactionId,
+      amount: coinsToAdd,
+      planName,
+      type: 'SUBSCRIPTION'
+    });
+    
     const { error: transError } = await supabase
       .from('coin_transactions')
       .insert({
@@ -329,8 +337,20 @@ export async function addSubscriptionCoins(userId: string, planName: string, coi
       });
       
     if (transError) {
-      console.error('Error recording subscription transaction:', transError);
+      console.error('Error recording subscription transaction:', {
+        error: transError,
+        message: transError.message,
+        details: transError.details,
+        hint: transError.hint,
+        code: transError.code,
+        userId,
+        transactionId,
+        amount: coinsToAdd,
+        planName
+      });
       // Continue anyway since the coins were added
+    } else {
+      console.log(`✅ Successfully recorded transaction ${transactionId}`);
     }
 
     console.log(`Successfully added ${coinsToAdd} coins to user ${userId}. New balance: ${newBalance}`);
