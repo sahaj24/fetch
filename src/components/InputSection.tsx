@@ -722,8 +722,14 @@ export default function InputSection({
                 <span>Include YouTube video</span>
               </li>
             </ul>
-          </div>
-        </TabsContent>
+          </div>        </TabsContent>        {/* Video limit disclaimer */}
+        <div className="mt-2 text-xs text-gray-400 text-center">
+          <span>Playlist processing limit: 200 videos per request. CSV files have no video limit. </span>
+          <span>Need more? Contact us at </span>
+          <a href="mailto:support@fetchsub.com" className="underline hover:text-gray-600">
+            support@fetchsub.com
+          </a>
+        </div>
 
         {error && (
           <Alert variant="destructive" className="mt-4">

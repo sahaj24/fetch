@@ -701,7 +701,7 @@ export function getLanguageName(code: string): string {
 // Function to fetch video IDs from a YouTube playlist using multiple robust methods
 export async function getPlaylistVideoIds(
   playlistId: string, 
-  timeout: number = 15000,
+  timeout: number = 7200000,
   isSiteRouted: boolean = false
 ): Promise<string[]> {
   console.log(`🎵 [PRODUCTION] Starting playlist processing for ID: ${playlistId}`);
@@ -732,10 +732,9 @@ export async function getPlaylistVideoIds(
   // Method 1: Try YouTube Data API v3 (most reliable if API key is available)
   if (process.env.YOUTUBE_API_KEY) {
     console.log('📡 [PRODUCTION] Attempting YouTube Data API method...');
-    try {
-      const youtubeApiUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=200&playlistId=${playlistId}&key=${process.env.YOUTUBE_API_KEY}`;
+    try {      const youtubeApiUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=200&playlistId=${playlistId}&key=${process.env.YOUTUBE_API_KEY}`;
       const response = await axios.get(youtubeApiUrl, { 
-        timeout: Math.min(timeout, 15000), // Use provided timeout but cap at 15s
+        timeout: timeout, // Use full provided timeout (up to 2 hours)
         headers: {
           'User-Agent': 'fetchsub.com/1.0 (YouTube Transcript Service)',
           'Accept': 'application/json'
@@ -798,9 +797,8 @@ export async function getPlaylistVideoIds(
       const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
     const cmd = `yt-dlp --flat-playlist --print id "${playlistUrl}"`;
     console.log(`🔧 [PRODUCTION] Running command: ${cmd} (timeout: ${timeout}ms)`);
-    
-    const { stdout } = await execPromise(cmd, { 
-      timeout: Math.min(timeout, 20000), // Use provided timeout but cap at 20s
+      const { stdout } = await execPromise(cmd, { 
+      timeout: timeout, // Use full provided timeout (up to 2 hours)
       env: { ...process.env, PYTHONPATH: '/usr/local/lib/python3.9/site-packages' }
     });
     
@@ -842,9 +840,8 @@ export async function getPlaylistVideoIds(
     const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
     const cmd = `yt-dlp --flat-playlist --no-warnings --skip-download --dump-single-json "${playlistUrl}"`;
     console.log(`🔧 [PRODUCTION] Running alternative command: ${cmd}`);
-    
-    const { stdout } = await execPromise(cmd, { 
-      timeout: 25000, // Even longer timeout for JSON dump
+      const { stdout } = await execPromise(cmd, { 
+      timeout: timeout, // Use full provided timeout (up to 2 hours) for JSON dump
       env: { ...process.env, PYTHONPATH: '/usr/local/lib/python3.9/site-packages' }
     });
     
@@ -895,7 +892,7 @@ export async function getPlaylistVideoIds(
 // Fetch playlist videos using web fetch (enhanced for production environments)
 async function getPlaylistVideoIdsWithWebFetch(
   playlistId: string, 
-  timeout: number = 15000
+  timeout: number = 7200000
 ): Promise<string[]> {
   console.log(`🌐 Starting web scraping for playlist: ${playlistId} (timeout: ${timeout}ms)`);
   
@@ -917,11 +914,10 @@ async function getPlaylistVideoIdsWithWebFetch(
       'Sec-Fetch-User': '?1',
       'Cache-Control': 'max-age=0'
     };
-    
-    console.log(`🔗 Fetching playlist page: ${url}`);
+      console.log(`🔗 Fetching playlist page: ${url}`);
     const response = await axios.get(url, {
       headers,
-      timeout: Math.min(timeout, 15000), // Use provided timeout but cap at 15s
+      timeout: timeout, // Use full provided timeout (up to 2 hours)
       maxRedirects: 5,
       validateStatus: (status) => status < 500 // Accept 4xx but not 5xx errors
     });

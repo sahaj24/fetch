@@ -6,7 +6,7 @@ export let users = [
   {
     id: "1",
     name: "Demo User",
-    email: "user@example.com",
+    email: "user@fetchsub.com",
     password: "$2b$10$8r0qPieXUJO.3P1Zx2F6ZuQkLu3zUYW1sUu1w/fBPwvPyfNnJzqAa", // hashed 'password123'
     image: "https://api.dicebear.com/7.x/avataaars/svg?seed=demo",
   },

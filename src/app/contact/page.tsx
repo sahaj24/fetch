@@ -28,21 +28,43 @@ export default function ContactPage() {
     const { name, value } = e.target;
     setFormState((prev) => ({ ...prev, [name]: value }));
   };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setSubmitStatus({ type: null, message: "" });
 
-    // Simulate form submission
-    setTimeout(() => {
-      setIsSubmitting(false);
-      setSubmitStatus({
-        type: "success",
-        message: "Your message has been sent! We'll get back to you soon.",
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formState),
       });
-      setFormState({ name: "", email: "", subject: "", message: "" });
-    }, 1500);
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setSubmitStatus({
+          type: "success",
+          message: data.message || "Your message has been sent! We'll get back to you soon.",
+        });
+        setFormState({ name: "", email: "", subject: "", message: "" });
+      } else {
+        setSubmitStatus({
+          type: "error",
+          message: data.error || "Failed to send message. Please try again.",
+        });
+      }
+    } catch (error) {
+      console.error('Contact form error:', error);
+      setSubmitStatus({
+        type: "error",
+        message: "Network error. Please check your connection and try again.",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -93,12 +115,11 @@ export default function ContactPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input
+                    <Label htmlFor="email">Email Address</Label>                    <Input
                       id="email"
                       name="email"
                       type="email"
-                      placeholder="john@example.com"
+                      placeholder="john@fetchsub.com"
                       value={formState.email}
                       onChange={handleChange}
                       required

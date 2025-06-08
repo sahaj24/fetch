@@ -242,13 +242,12 @@ export default function SettingsPage() {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email Address</Label>
-                    <Input
+                    <Label htmlFor="email">Email Address</Label>                    <Input
                       id="email"
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="your.email@example.com"
+                      placeholder="your.email@fetchsub.com"
                       required
                     />
                     <p className="text-sm text-gray-500">
