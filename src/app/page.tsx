@@ -503,8 +503,7 @@ export default function Home() {
         duration: 5000
       });
     }
-  };
-    // Function to process the actual API request
+  };  // Function to process the actual API request
   const processRequest = async (payload: any) => {
     setIsProcessing(true);
     setActiveTab("processing");
@@ -520,6 +519,10 @@ export default function Home() {
 
     // Start progress simulation with time estimation
     const progressInterval = startSimulatedProgress();
+    
+    // Prepare timeout configuration for fetch request
+    const timeoutMs = payload.inputType === 'url' && payload.url?.includes('playlist') ? 900000 : 300000; // 15 min for playlists, 5 min for videos
+    let timeoutId: NodeJS.Timeout | null = null;
   
     try {
       // Get user ID upfront to verify it exists
@@ -630,9 +633,16 @@ export default function Home() {
         
         // Update the UI with the new balance immediately
         setUserCoinBalance(deductResult.remainingBalance);
-      }
+      }      // Make API request to extract subtitles
+      // Create AbortController for custom timeout
+      const controller = new AbortController();
+      timeoutId = setTimeout(() => {
+        console.warn(`⏰ Request timeout after ${Math.floor(timeoutMs / 60000)} minutes`);
+        controller.abort();
+      }, timeoutMs);
       
-      // Make API request to extract subtitles
+      console.log(`🚀 Starting request with ${Math.floor(timeoutMs / 60000)}-minute timeout for ${payload.inputType === 'url' && payload.url?.includes('playlist') ? 'playlist' : 'single video'}`);
+      
       const response = await fetch("/api/youtube/extract", {
         method: "POST",
         headers: { 
@@ -649,7 +659,15 @@ export default function Home() {
           // Add flag to skip coin deduction in API since we already did it
           ...(userId ? { "skipCoinDeduction": true } : {})
         }),
+        signal: controller.signal
       });
+      
+      // Clear the timeout since request completed
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+        console.log('✅ Request completed before timeout');
+      }
   
       // Clear progress interval
       clearInterval(progressInterval);
@@ -769,22 +787,38 @@ export default function Home() {
           setActiveTab("results");
         });
       }    } catch (error: any) {
+      // Clear timeout if it's still active
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+      
       console.error("[ERROR] Process Error:", error);
-      toast.error(error.message || "Processing failed", {
+      
+      // Handle timeout errors specifically
+      let errorMessage = error.message || "Processing failed";
+      let errorContent = `An error occurred while processing your request:\n\n${error.message || 'Unknown error'}`;
+      
+      if (error.name === 'AbortError') {
+        const timeoutMinutes = Math.floor(timeoutMs / 60000);
+        errorMessage = `Request timeout after ${timeoutMinutes} minutes`;
+        errorContent = `The request timed out after ${timeoutMinutes} minutes.\n\nThis can happen with:\n• Very large playlists (100+ videos)\n• Complex video processing\n• Network connectivity issues\n\nSuggestions:\n• Try processing a smaller batch of videos\n• Check your internet connection\n• For large playlists, consider breaking them into smaller chunks\n• Contact support if timeouts persist with smaller requests`;
+      }
+      
+      toast.error(errorMessage, {
         duration: 5000
       });
       
       // Create an error result to display instead of redirecting
       const errorResult = [{
         id: `processing-error-${Date.now()}`,
-        videoTitle: 'Processing Error',
+        videoTitle: error.name === 'AbortError' ? 'Request Timeout' : 'Processing Error',
         language: getLanguageName(selectedLanguage),
         format: selectedFormats[0] || 'txt',
         fileSize: '0KB',
-        content: `An error occurred while processing your request:\n\n${error.message || 'Unknown error'}\n\nPlease try again. If the problem persists:\n• Check that the URL is valid and accessible\n• Ensure the video has captions enabled\n• Try with a single video instead of a playlist\n• Contact support if the issue continues`,
+        content: errorContent,
         url: payload.url || '',
         downloadUrl: '',
-        error: error.message || 'Processing failed'
+        error: errorMessage
       }];
       
       // Show results tab with error information instead of redirecting to input
