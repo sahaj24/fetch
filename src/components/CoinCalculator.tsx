@@ -15,20 +15,19 @@ export function CoinCalculator({
   videoCount = 1, 
   formatCount = 1,
   isPlaylist = false
-}: CoinCalculatorProps) {
-  const [totalCost, setTotalCost] = useState(0);
+}: CoinCalculatorProps) {  const [totalCost, setTotalCost] = useState(0);
   
   // Calculate cost whenever inputs change
   useEffect(() => {
-    // Base cost calculation
+    // Base cost calculation - matches backend logic (includes format multiplication)
     let cost = 0;
     
     // For multiple videos (either playlist or CSV), use batch cost
     if (isPlaylist || videoCount > 1) {
-      cost = videoCount * formatCount * OPERATION_COSTS.BATCH_SUBTITLE;
+      cost = videoCount * OPERATION_COSTS.BATCH_SUBTITLE * formatCount;
     } else {
       // For single video, use single cost
-      cost = formatCount * OPERATION_COSTS.SINGLE_SUBTITLE;
+      cost = OPERATION_COSTS.SINGLE_SUBTITLE * formatCount;
     }
     
     // Minimum cost is 1 coin

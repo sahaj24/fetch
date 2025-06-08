@@ -849,21 +849,20 @@ export default function Home() {
       // If selectedFormats is empty, use default formats for calculation
       const formatsToUse = DEFAULT_FORMATS;
       console.log('🔧 Using default formats for calculation:', formatsToUse);
-      
-      // Recalculate with default formats
+        // Recalculate with default formats
       let baseCost = 0;
       if (isPlaylist) {
         const roundedVideoCount = Math.max(1, Math.round(videoCount));
-        baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE * formatsToUse.length;
-        console.log(`[COST] Playlist mode (with defaults): ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate × ${formatsToUse.length} formats = ${baseCost}`);
+        baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE;
+        console.log(`[COST] Playlist mode (with defaults): ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate = ${baseCost}`);
       } else {
         if (videoCount > 1) {
           const roundedVideoCount = Math.max(1, Math.round(videoCount));
-          baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE * formatsToUse.length;
-          console.log(`[COST] Multiple videos (with defaults): ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate × ${formatsToUse.length} formats = ${baseCost}`);
+          baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE;
+          console.log(`[COST] Multiple videos (with defaults): ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate = ${baseCost}`);
         } else {
-          baseCost = OPERATION_COSTS.SINGLE_SUBTITLE * formatsToUse.length;
-          console.log(`[COST] Single video (with defaults): ${OPERATION_COSTS.SINGLE_SUBTITLE} single rate × ${formatsToUse.length} formats = ${baseCost}`);
+          baseCost = OPERATION_COSTS.SINGLE_SUBTITLE;
+          console.log(`[COST] Single video (with defaults): ${OPERATION_COSTS.SINGLE_SUBTITLE} single rate = ${baseCost}`);
         }
       }
       const roundedBaseCost = Math.round(baseCost * 100) / 100;
@@ -874,26 +873,25 @@ export default function Home() {
     
     // Base calculation
     let baseCost = 0;
-    
-    // Handle calculation based on input type
+      // Handle calculation based on input type
     if (isPlaylist) {
       // For playlists/channels - use batch rate
       // Round videoCount to ensure integer values for consistent calculations
       const roundedVideoCount = Math.max(1, Math.round(videoCount));
-      baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE * selectedFormats.length;
-      console.log(`[COST] Playlist mode: ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate × ${selectedFormats.length} formats = ${baseCost}`);
+      baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE;
+      console.log(`[COST] Playlist mode: ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate = ${baseCost}`);
     } else {
       // For single videos
       if (videoCount > 1) {
         // Multiple single videos (from CSV)
         // Round videoCount to ensure integer values for consistent calculations
         const roundedVideoCount = Math.max(1, Math.round(videoCount));
-        baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE * selectedFormats.length;
-        console.log(`[COST] Multiple videos: ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate × ${selectedFormats.length} formats = ${baseCost}`);
+        baseCost = roundedVideoCount * OPERATION_COSTS.BATCH_SUBTITLE;
+        console.log(`[COST] Multiple videos: ${roundedVideoCount} videos × ${OPERATION_COSTS.BATCH_SUBTITLE} batch rate = ${baseCost}`);
       } else {
         // Just one video
-        baseCost = OPERATION_COSTS.SINGLE_SUBTITLE * selectedFormats.length;
-        console.log(`[COST] Single video: ${OPERATION_COSTS.SINGLE_SUBTITLE} single rate × ${selectedFormats.length} formats = ${baseCost}`);
+        baseCost = OPERATION_COSTS.SINGLE_SUBTITLE;
+        console.log(`[COST] Single video: ${OPERATION_COSTS.SINGLE_SUBTITLE} single rate = ${baseCost}`);
       }
     }
     

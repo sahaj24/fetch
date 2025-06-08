@@ -67,7 +67,7 @@ export const OPERATION_COSTS = {
   BASE_CSV_COST: 1,      // Base cost for CSV file
   BASE_SINGLE_COST: 1,   // Base cost for single video
   SINGLE_SUBTITLE: 1,    // Cost per format for single video
-  BATCH_SUBTITLE: 0.5,   // Cost per format for batch (discount)
+  BATCH_SUBTITLE: 1,   // Cost per format for batch (discount)
 };
 
 // Type definitions
