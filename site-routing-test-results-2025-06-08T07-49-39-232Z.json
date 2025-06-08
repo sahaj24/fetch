@@ -1,0 +1,288 @@
+{
+  "timestamp": "2025-06-08T07:49:39.232Z",
+  "testCases": {
+    "SINGLE_VIDEO": {
+      "inputType": "url",
+      "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+      "formats": [
+        "txt"
+      ],
+      "language": "en"
+    },
+    "SMALL_PLAYLIST": {
+      "inputType": "url",
+      "url": "https://www.youtube.com/playlist?list=PLrAXtmRdnEQy6nuLviYrk7wJNADIZj2F7",
+      "formats": [
+        "txt"
+      ],
+      "language": "en"
+    },
+    "LARGE_PLAYLIST": {
+      "inputType": "url",
+      "url": "https://www.youtube.com/playlist?list=PLmpmyPywZ443PFI8YF3ZMmoEcRO5FvK6N",
+      "formats": [
+        "txt"
+      ],
+      "language": "en"
+    }
+  },
+  "routingScenarios": {
+    "DIRECT_ACCESS": {
+      "name": "Direct Access",
+      "headers": {
+        "Content-Type": "application/json",
+        "User-Agent": "Test-Client/1.0"
+      }
+    },
+    "SITE_ROUTED_BASIC": {
+      "name": "Site Routed (Basic Proxy)",
+      "headers": {
+        "Content-Type": "application/json",
+        "User-Agent": "Test-Client/1.0",
+        "X-Forwarded-For": "192.168.1.100",
+        "X-Real-IP": "192.168.1.100",
+        "Host": "yoursite.com"
+      }
+    },
+    "SITE_ROUTED_CDN": {
+      "name": "Site Routed (CDN/Cloudflare)",
+      "headers": {
+        "Content-Type": "application/json",
+        "User-Agent": "Test-Client/1.0",
+        "X-Forwarded-For": "192.168.1.100, 104.16.0.1",
+        "X-Real-IP": "192.168.1.100",
+        "CF-Ray": "123456789abcdef0-LAX",
+        "CF-Connecting-IP": "192.168.1.100",
+        "Host": "yoursite.com",
+        "Referer": "https://yoursite.com/dashboard"
+      }
+    },
+    "SITE_ROUTED_NETLIFY": {
+      "name": "Site Routed (Netlify)",
+      "headers": {
+        "Content-Type": "application/json",
+        "User-Agent": "Test-Client/1.0",
+        "X-Forwarded-For": "192.168.1.100",
+        "X-Forwarded-Proto": "https",
+        "X-Country": "US",
+        "Host": "yoursite.netlify.app",
+        "Referer": "https://yoursite.netlify.app"
+      }
+    },
+    "SITE_ROUTED_VERCEL": {
+      "name": "Site Routed (Vercel)",
+      "headers": {
+        "Content-Type": "application/json",
+        "User-Agent": "Test-Client/1.0",
+        "X-Forwarded-For": "192.168.1.100",
+        "X-Forwarded-Host": "yoursite.vercel.app",
+        "X-Vercel-Id": "sfo1::abcde-1234567890",
+        "Host": "yoursite.vercel.app",
+        "Referer": "https://yoursite.vercel.app"
+      }
+    }
+  },
+  "results": [
+    {
+      "testName": "SINGLE_VIDEO",
+      "routingScenario": "Direct Access",
+      "status": 402,
+      "duration": 1591,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "SINGLE_VIDEO",
+      "routingScenario": "Site Routed (Basic Proxy)",
+      "status": 402,
+      "duration": 953,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "SINGLE_VIDEO",
+      "routingScenario": "Site Routed (CDN/Cloudflare)",
+      "status": 402,
+      "duration": 411,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "SINGLE_VIDEO",
+      "routingScenario": "Site Routed (Netlify)",
+      "status": 402,
+      "duration": 914,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "SINGLE_VIDEO",
+      "routingScenario": "Site Routed (Vercel)",
+      "status": 402,
+      "duration": 411,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "SMALL_PLAYLIST",
+      "routingScenario": "Direct Access",
+      "status": 402,
+      "duration": 3781,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "SMALL_PLAYLIST",
+      "routingScenario": "Site Routed (Basic Proxy)",
+      "status": 402,
+      "duration": 4079,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "SMALL_PLAYLIST",
+      "routingScenario": "Site Routed (CDN/Cloudflare)",
+      "status": 402,
+      "duration": 3712,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "SMALL_PLAYLIST",
+      "routingScenario": "Site Routed (Netlify)",
+      "status": 402,
+      "duration": 3731,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "SMALL_PLAYLIST",
+      "routingScenario": "Site Routed (Vercel)",
+      "status": 402,
+      "duration": 3839,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "LARGE_PLAYLIST",
+      "routingScenario": "Direct Access",
+      "status": 402,
+      "duration": 3213,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "LARGE_PLAYLIST",
+      "routingScenario": "Site Routed (Basic Proxy)",
+      "status": 402,
+      "duration": 3477,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "LARGE_PLAYLIST",
+      "routingScenario": "Site Routed (CDN/Cloudflare)",
+      "status": 402,
+      "duration": 3687,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "LARGE_PLAYLIST",
+      "routingScenario": "Site Routed (Netlify)",
+      "status": 402,
+      "duration": 3318,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    },
+    {
+      "testName": "LARGE_PLAYLIST",
+      "routingScenario": "Site Routed (Vercel)",
+      "status": 402,
+      "duration": 3711,
+      "success": false,
+      "dataSize": 73,
+      "error": null,
+      "subtitleCount": 0,
+      "videoCount": 0,
+      "errorCount": 0,
+      "routing_detected": false
+    }
+  ],
+  "summary": {
+    "totalTests": 15,
+    "successful": 0,
+    "failed": 15,
+    "routingDetected": 0
+  }
+}

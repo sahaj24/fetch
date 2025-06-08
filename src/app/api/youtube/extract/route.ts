@@ -27,6 +27,41 @@ export const runtime = 'nodejs';
 // Production environment check
 const isProduction = process.env.NODE_ENV === 'production';
 
+// Cloud environment detection
+const isCloudEnvironment = !!(
+  process.env.VERCEL ||
+  process.env.NETLIFY ||
+  process.env.HEROKU ||
+  process.env.RAILWAY ||
+  process.env.AWS_REGION ||
+  process.env.CF_PAGES || // Cloudflare Pages
+  process.env.RENDER || // Render.com
+  isProduction
+);
+
+// Site routing configuration
+const SITE_ROUTING_CONFIG = {
+  // More conservative limits for site-routed requests
+  MAX_CONCURRENT_SITE_ROUTED: 1,
+  MAX_VIDEOS_SITE_ROUTED: 5,
+  TIMEOUT_SITE_ROUTED: 10000, // 10 seconds for site-routed requests
+  TIMEOUT_DIRECT: 15000, // 15 seconds for direct requests
+};
+
+// Function to detect if request is coming through site routing
+function isSiteRoutedRequest(req: NextRequest): boolean {
+  const xForwardedFor = req.headers.get('x-forwarded-for');
+  const xRealIp = req.headers.get('x-real-ip');
+  const referer = req.headers.get('referer') || '';
+  const host = req.headers.get('host') || '';
+  
+  return !!(xForwardedFor || xRealIp || 
+    referer.includes('yoursite.com') || // Replace with actual site domain
+    referer.includes('netlify.app') ||
+    referer.includes('vercel.app') ||
+    (host !== 'localhost:3000' && host !== 'localhost:3001' && !host.includes('127.0.0.1')));
+}
+
 // Function to log production debugging info
 function logProductionDebug(message: string, data?: any) {
   if (isProduction) {
@@ -103,10 +138,41 @@ function cleanupCaches() {
 // Run cache cleanup every 5 minutes
 setInterval(cleanupCaches, 5 * 60 * 1000);
 
-// Constants for batch processing
-const MAX_CONCURRENT_REQUESTS = 3; // Reduced from 5 to avoid overwhelming the system
-// No maximum limit on videos per batch - process all URLs
-const MAX_VIDEOS_PER_BATCH = Number.MAX_SAFE_INTEGER; // Effectively unlimited
+// Cloud-aware configuration
+const CLOUD_MAX_CONCURRENT = 1;
+const CLOUD_MAX_VIDEOS = 10;
+const LOCAL_MAX_CONCURRENT = 3;
+const LOCAL_MAX_VIDEOS = Number.MAX_SAFE_INTEGER;
+
+// Dynamic configuration based on environment and routing
+function getProcessingConfig(isSiteRouted: boolean) {
+  if (isSiteRouted) {
+    // Most conservative settings for site-routed requests
+    return {
+      maxConcurrent: SITE_ROUTING_CONFIG.MAX_CONCURRENT_SITE_ROUTED,
+      maxVideos: SITE_ROUTING_CONFIG.MAX_VIDEOS_SITE_ROUTED,
+      timeout: SITE_ROUTING_CONFIG.TIMEOUT_SITE_ROUTED
+    };
+  } else if (isCloudEnvironment) {
+    // Cloud settings for direct requests
+    return {
+      maxConcurrent: CLOUD_MAX_CONCURRENT,
+      maxVideos: CLOUD_MAX_VIDEOS,
+      timeout: SITE_ROUTING_CONFIG.TIMEOUT_DIRECT
+    };
+  } else {
+    // Local development settings
+    return {
+      maxConcurrent: LOCAL_MAX_CONCURRENT,
+      maxVideos: LOCAL_MAX_VIDEOS,
+      timeout: SITE_ROUTING_CONFIG.TIMEOUT_DIRECT
+    };
+  }
+}
+
+// Legacy constants for backward compatibility
+const MAX_CONCURRENT_REQUESTS = 3;
+const MAX_VIDEOS_PER_BATCH = Number.MAX_SAFE_INTEGER;
 
 // Update SubtitleResult interface to include the new properties used in the code
 interface ExtendedSubtitleResult extends SubtitleResult {
@@ -705,7 +771,19 @@ async function processYouTubeUrl(
   url: string,
   formats: string[],
   language: string,
+  isSiteRouted: boolean = false
 ): Promise<SubtitleResult[]> {
+  // Get dynamic configuration based on routing
+  const config = getProcessingConfig(isSiteRouted);
+  
+  logProductionDebug('Processing YouTube URL', {
+    url: url.substring(0, 100),
+    formats,
+    language,
+    isSiteRouted,
+    config
+  });
+  
   // Extract the video ID to determine what type of URL it is
   const videoId = extractVideoId(url);
   if (!videoId) {
@@ -735,41 +813,63 @@ async function processYouTubeUrl(
       if (!playlistId || playlistId.length < 5) {
         throw new Error('Invalid playlist ID format');
       }
-      
-      // Add a specific try-catch for the getPlaylistVideoIds function call
+        // Add a specific try-catch for the getPlaylistVideoIds function call
       let playlistVideoIds;
       try {
-        playlistVideoIds = await getPlaylistVideoIds(playlistId);
+        playlistVideoIds = await getPlaylistVideoIds(playlistId, config.timeout, isSiteRouted);
       } catch (playlistError) {
         console.error('Error in getPlaylistVideoIds:', playlistError);
         throw new Error(`Could not retrieve videos from playlist: ${
           playlistError instanceof Error ? playlistError.message : 'Unknown error'
         }`);
       }
-      
-      if (playlistVideoIds.length === 0) {
+        if (playlistVideoIds.length === 0) {
         throw new Error('No videos found in this playlist. The playlist might be empty, private, or does not exist.');
       }
-      
-      // Display how many videos were found
       
       // Convert video IDs to full URLs
       videoUrls = playlistVideoIds.map(id => `https://www.youtube.com/watch?v=${id}`);
       
-      // Limit the number of videos to process
+      // Apply dynamic limits based on routing and environment
       const originalCount = videoUrls.length;
-      if (videoUrls.length > MAX_VIDEOS_PER_BATCH) {
-        videoUrls = videoUrls.slice(0, MAX_VIDEOS_PER_BATCH);
+      let wasLimited = false;
+      
+      if (videoUrls.length > config.maxVideos) {
+        videoUrls = videoUrls.slice(0, config.maxVideos);
+        wasLimited = true;
       }
       
-      // If no videos were returned after limits, throw an error
+      // Log processing info with routing context
+      logProductionDebug('Playlist processing info', {
+        playlistId,
+        originalCount,
+        processedCount: videoUrls.length,
+        wasLimited,
+        isSiteRouted,
+        maxVideos: config.maxVideos,
+        reason: isSiteRouted ? 'site-routed-limits' : (isCloudEnvironment ? 'cloud-limits' : 'no-limits')
+      });
+        // If no videos were returned after limits, throw an error
       if (videoUrls.length === 0) {
         throw new Error(`Failed to extract any valid videos from playlist. Retrieved ${originalCount} IDs but none were valid.`);
+      }
+      
+      // Add processing notice for limited playlists
+      if (wasLimited) {
+        const limitReason = isSiteRouted 
+          ? `Limited to ${config.maxVideos} videos for site-routed requests to ensure reliability`
+          : `Limited to ${config.maxVideos} videos for cloud processing to manage resources`;
+        
+        logProductionDebug('Playlist limited', {
+          originalCount,
+          processedCount: videoUrls.length,
+          reason: limitReason
+        });
       }
     } catch (error) {
       console.error(`Error fetching playlist videos:`, error);
       
-      // Create a user-friendly error message based on the specific error
+      // Enhanced error message with routing context
       let errorMessage = "Failed to fetch playlist videos.";
       let detailedError = "";
       
@@ -781,10 +881,25 @@ async function processYouTubeUrl(
         } else if (error.message.includes("no valid videos") || error.message.includes("No videos found")) {
           errorMessage = "No valid videos found in this playlist. The playlist may be empty or contains only unavailable videos.";
         } else if (error.message.includes("yt-dlp")) {
-          errorMessage = "There was an issue with the video extraction tool. This might be a temporary issue, please try again later.";
+          errorMessage = isSiteRouted 
+            ? "There was an issue with playlist processing through your site. This might be due to routing timeouts. Try using the direct API endpoint or individual video URLs."
+            : "There was an issue with the video extraction tool. This might be a temporary issue, please try again later.";
         } else if (error.message.includes("not available")) {
           errorMessage = "The necessary tools for extracting playlist videos are not available on the server. Please contact support.";
+        } else if (error.message.includes("timeout")) {
+          errorMessage = isSiteRouted
+            ? "Playlist processing timed out when routed through your site. Try using fewer videos or access the API directly."
+            : "Playlist processing timed out. Please try again with fewer videos.";
         }
+      }
+      
+      // Add routing-specific guidance
+      let routingGuidance = "";
+      if (isSiteRouted) {
+        routingGuidance = "\n\nSite Routing Issue: This request came through your site's proxy/CDN which has stricter limits. Try:\n" +
+          "1. Using individual video URLs instead of playlist URLs\n" +
+          "2. Accessing the API endpoint directly\n" +
+          "3. Processing smaller batches of videos";
       }
       
       return [{ 
@@ -793,11 +908,13 @@ async function processYouTubeUrl(
         language: getLanguageName(language),
         format: formats[0] || 'txt',
         fileSize: '0KB',
-        content: `${errorMessage}\n\nTechnical details: ${detailedError}\n\nTry using individual video URLs instead of the playlist URL.`,
+        content: `${errorMessage}\n\nTechnical details: ${detailedError}${routingGuidance}\n\nTry using individual video URLs instead of the playlist URL.`,
         url,
         downloadUrl: '',
         error: errorMessage,
-        notice: "If this error persists, try extracting videos from the playlist one by one instead."
+        notice: isSiteRouted 
+          ? "Site routing detected - try direct API access for better playlist processing"
+          : "If this error persists, try extracting videos from the playlist one by one instead."
       }];
     }
   } else if (videoId.startsWith('channel:')) {
@@ -893,13 +1010,12 @@ async function processYouTubeUrl(
       }];
     }
   };
-
   // Process all videos with concurrency limits
   try {
     const batchResults = await processBatchWithConcurrency(
       videoUrls,
       processVideo,
-      MAX_CONCURRENT_REQUESTS
+      config.maxConcurrent // Use dynamic concurrency based on routing
     );
 
     // Add batch processing metadata
@@ -909,6 +1025,18 @@ async function processYouTubeUrl(
       const successCount = results.filter(r => !r.error && !r.isGenerated).length;
       const generatedCount = results.filter(r => r.isGenerated).length;
       const errorCount = results.filter(r => r.error).length;
+      
+      // Enhanced summary with routing context
+      const routingInfo = isSiteRouted ? " (site-routed)" : (isCloudEnvironment ? " (cloud)" : " (local)");
+      
+      logProductionDebug('Batch processing completed', {
+        totalVideos: videoUrls.length,
+        successCount,
+        generatedCount,
+        errorCount,
+        concurrency: config.maxConcurrent,
+        routing: routingInfo.trim()
+      });
       
       // Add a summary entry
       results.push({
@@ -950,16 +1078,26 @@ async function processCSVFile(
   csvContent: string,
   formats: string[],
   language: string,
+  isSiteRouted: boolean = false
 ): Promise<SubtitleResult[]> {
+  // Get dynamic configuration based on routing
+  const config = getProcessingConfig(isSiteRouted);
+  
   try {
     // Parse CSV content to extract URLs
     const parsedResult = await parseCSVContent(csvContent);
     const { urls: videoUrls, stats } = parsedResult;
     
-    // Log CSV parsing statistics
+    // Log CSV parsing statistics with routing context
+    logProductionDebug('CSV parsing completed', {
+      totalUrls: videoUrls.length,
+      stats,
+      isSiteRouted,
+      config
+    });
     
     if (videoUrls.length === 0) {
-      return [{ 
+      return [{
         id: `csv-error-${Date.now()}`,
         videoTitle: 'CSV Processing Error',
         language: getLanguageName(language),
@@ -1004,12 +1142,11 @@ async function processCSVFile(
       }
       return videoResults;
     };
-    
-    // Process all videos with concurrency limits
+      // Process all videos with concurrency limits
     const batchResults = await processBatchWithConcurrency(
       processableUrls,
       processVideo,
-      MAX_CONCURRENT_REQUESTS
+      config.maxConcurrent // Use dynamic concurrency based on routing
     );
     
     // Process all results without skipping any
@@ -1091,11 +1228,30 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Production debugging
+  // Enhanced production debugging with site routing detection
+  const userAgent = req.headers.get('user-agent') || '';
+  const referer = req.headers.get('referer') || '';
+  const xForwardedFor = req.headers.get('x-forwarded-for') || '';
+  const xRealIp = req.headers.get('x-real-ip') || '';
+  const host = req.headers.get('host') || '';
+  const contentLength = req.headers.get('content-length') || '';
+  
+  // Detect if request is coming through a proxy/CDN (site routing)
+  const isSiteRouted = !!(xForwardedFor || xRealIp || 
+    referer.includes('yoursite.com') || // Replace with actual site domain
+    host !== 'localhost:3000' && host !== 'localhost:3001');
+  
   logProductionDebug('POST request received', {
     url: req.url,
     method: req.method,
-    headers: Object.fromEntries(req.headers.entries())
+    host,
+    userAgent: userAgent.substring(0, 100),
+    referer,
+    xForwardedFor,
+    xRealIp,
+    contentLength,
+    isSiteRouted,
+    timestamp: new Date().toISOString()
   });
 
   try {
@@ -1161,7 +1317,7 @@ export async function POST(req: NextRequest) {
         // This is a single video - use the requested language directly
       }
       
-      subtitles = await processYouTubeUrl(url, formats, actualLanguage);
+      subtitles = await processYouTubeUrl(url, formats, actualLanguage, isSiteRouted);
       // Calculate stats for successful subtitles
       const validSubtitles = subtitles as SubtitleResult[];
       processingStats.totalVideos = validSubtitles.length / formats.length;
@@ -1240,9 +1396,8 @@ export async function POST(req: NextRequest) {
         if (typeof csvContent !== 'string' || !csvContent.trim()) {
           throw new Error("Empty or invalid CSV content");
         }
-        
-        // Process the CSV file
-        subtitles = await processCSVFile(csvContent, formats, language);
+          // Process the CSV file
+        subtitles = await processCSVFile(csvContent, formats, language, isSiteRouted);
         
         // Check if we got results
         if (!Array.isArray(subtitles) || subtitles.length === 0) {
