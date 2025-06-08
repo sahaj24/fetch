@@ -43,7 +43,7 @@ const isCloudEnvironment = !!(
 const SITE_ROUTING_CONFIG = {
   // More conservative limits for site-routed requests
   MAX_CONCURRENT_SITE_ROUTED: 1,
-  MAX_VIDEOS_SITE_ROUTED: 5,
+  MAX_VIDEOS_SITE_ROUTED: 200, // Increased to 200 to handle very large playlists
   TIMEOUT_SITE_ROUTED: 10000, // 10 seconds for site-routed requests
   TIMEOUT_DIRECT: 15000, // 15 seconds for direct requests
 };
@@ -140,7 +140,7 @@ setInterval(cleanupCaches, 5 * 60 * 1000);
 
 // Cloud-aware configuration
 const CLOUD_MAX_CONCURRENT = 1;
-const CLOUD_MAX_VIDEOS = 10;
+const CLOUD_MAX_VIDEOS = 200; // Increased to 200 to handle very large playlists
 const LOCAL_MAX_CONCURRENT = 3;
 const LOCAL_MAX_VIDEOS = Number.MAX_SAFE_INTEGER;
 
