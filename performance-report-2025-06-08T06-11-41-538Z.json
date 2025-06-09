@@ -1,0 +1,2236 @@
+{
+  "timestamp": "2025-06-08T06:11:41.540Z",
+  "systemInfo": {
+    "platform": "darwin",
+    "arch": "arm64",
+    "totalMemoryMB": 24576,
+    "cpuCount": 10,
+    "cpuModel": "Apple M4",
+    "nodeVersion": "v23.11.0"
+  },
+  "testResults": {
+    "systemInfo": {
+      "platform": "darwin",
+      "arch": "arm64",
+      "totalMemoryGB": 24,
+      "cpuCount": 10,
+      "cpuModel": "Apple M4",
+      "nodeVersion": "v23.11.0"
+    },
+    "tests": {
+      "idle": {
+        "description": "Application idle state for 30 seconds",
+        "stats": {
+          "duration": 29,
+          "system": {
+            "memory": {
+              "minMB": 23869,
+              "maxMB": 24458,
+              "avgMB": 24139,
+              "totalSystemMB": 24576
+            },
+            "cpu": {
+              "minLoad": 3.15,
+              "maxLoad": 4.12,
+              "avgLoad": 3.76,
+              "cores": 10
+            }
+          },
+          "process": {
+            "cpu": {
+              "minPercent": 0,
+              "maxPercent": 40,
+              "avgPercent": 1.86
+            },
+            "memory": {
+              "minMB": 793.02,
+              "maxMB": 907.14,
+              "avgMB": 828.28,
+              "minPercent": 3.2,
+              "maxPercent": 3.7,
+              "avgPercent": 3.36
+            }
+          }
+        }
+      },
+      "singleVideo": {
+        "description": "Single video subtitle extraction",
+        "result": {
+          "success": false,
+          "duration": 3544,
+          "status": 402,
+          "videoCount": 0,
+          "responseSize": 0,
+          "error": "Request failed with status code 402"
+        },
+        "stats": {
+          "duration": 38,
+          "system": {
+            "memory": {
+              "minMB": 23869,
+              "maxMB": 24458,
+              "avgMB": 24124,
+              "totalSystemMB": 24576
+            },
+            "cpu": {
+              "minLoad": 2.89,
+              "maxLoad": 4.12,
+              "avgLoad": 3.6,
+              "cores": 10
+            }
+          },
+          "process": {
+            "cpu": {
+              "minPercent": 0,
+              "maxPercent": 40,
+              "avgPercent": 2.54
+            },
+            "memory": {
+              "minMB": 793.02,
+              "maxMB": 962.44,
+              "avgMB": 855.52,
+              "minPercent": 3.2,
+              "maxPercent": 3.9,
+              "avgPercent": 3.47
+            }
+          }
+        }
+      },
+      "multiFormat": {
+        "description": "Single video with multiple format extraction",
+        "result": {
+          "success": false,
+          "duration": 6130,
+          "status": 402,
+          "videoCount": 0,
+          "responseSize": 0,
+          "error": "Request failed with status code 402"
+        },
+        "stats": {
+          "duration": 49,
+          "system": {
+            "memory": {
+              "minMB": 23869,
+              "maxMB": 24458,
+              "avgMB": 24161,
+              "totalSystemMB": 24576
+            },
+            "cpu": {
+              "minLoad": 2.89,
+              "maxLoad": 4.12,
+              "avgLoad": 3.46,
+              "cores": 10
+            }
+          },
+          "process": {
+            "cpu": {
+              "minPercent": 0,
+              "maxPercent": 40,
+              "avgPercent": 2.64
+            },
+            "memory": {
+              "minMB": 793.02,
+              "maxMB": 962.44,
+              "avgMB": 873.39,
+              "minPercent": 3.2,
+              "maxPercent": 3.9,
+              "avgPercent": 3.54
+            }
+          }
+        }
+      },
+      "playlist": {
+        "description": "Small playlist processing (multiple videos)",
+        "result": {
+          "success": false,
+          "duration": 19777,
+          "status": 402,
+          "videoCount": 0,
+          "responseSize": 0,
+          "error": "Request failed with status code 402"
+        },
+        "stats": {
+          "duration": 74,
+          "system": {
+            "memory": {
+              "minMB": 23869,
+              "maxMB": 24501,
+              "avgMB": 24244,
+              "totalSystemMB": 24576
+            },
+            "cpu": {
+              "minLoad": 2.89,
+              "maxLoad": 4.12,
+              "avgLoad": 3.38,
+              "cores": 10
+            }
+          },
+          "process": {
+            "cpu": {
+              "minPercent": 0,
+              "maxPercent": 40,
+              "avgPercent": 2.51
+            },
+            "memory": {
+              "minMB": 793.02,
+              "maxMB": 962.44,
+              "avgMB": 894.39,
+              "minPercent": 3.2,
+              "maxPercent": 3.9,
+              "avgPercent": 3.63
+            }
+          }
+        }
+      },
+      "concurrent": {
+        "description": "3 concurrent single video requests",
+        "result": {
+          "totalRequests": 3,
+          "successfulRequests": 0,
+          "failedRequests": 3,
+          "avgDuration": 3067.3333333333335,
+          "maxDuration": 6771,
+          "minDuration": 1139,
+          "results": [
+            {
+              "success": false,
+              "duration": 1139,
+              "status": 402,
+              "videoCount": 0,
+              "responseSize": 0,
+              "error": "Request failed with status code 402"
+            },
+            {
+              "success": false,
+              "duration": 1292,
+              "status": 402,
+              "videoCount": 0,
+              "responseSize": 0,
+              "error": "Request failed with status code 402"
+            },
+            {
+              "success": false,
+              "duration": 6771,
+              "status": 402,
+              "videoCount": 0,
+              "responseSize": 0,
+              "error": "Request failed with status code 402"
+            }
+          ]
+        },
+        "stats": {
+          "duration": 86,
+          "system": {
+            "memory": {
+              "minMB": 23869,
+              "maxMB": 24501,
+              "avgMB": 24226,
+              "totalSystemMB": 24576
+            },
+            "cpu": {
+              "minLoad": 2.89,
+              "maxLoad": 4.12,
+              "avgLoad": 3.35,
+              "cores": 10
+            }
+          },
+          "process": {
+            "cpu": {
+              "minPercent": 0,
+              "maxPercent": 40,
+              "avgPercent": 2.25
+            },
+            "memory": {
+              "minMB": 793.02,
+              "maxMB": 962.44,
+              "avgMB": 901.16,
+              "minPercent": 3.2,
+              "maxPercent": 3.9,
+              "avgPercent": 3.65
+            }
+          }
+        }
+      }
+    }
+  },
+  "rawMeasurements": [
+    {
+      "timestamp": 1749363016304,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 119,
+        "usedMemoryMB": 24457,
+        "memoryUsagePercent": 99.52,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 4.12,
+          "5min": 2.71,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 8.3,
+        "memPercent": 3.7,
+        "rss": 924432,
+        "vsz": 457310512,
+        "time": "0:05.41"
+      }
+    },
+    {
+      "timestamp": 1749363017304,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 118,
+        "usedMemoryMB": 24458,
+        "memoryUsagePercent": 99.52,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 4.12,
+          "5min": 2.71,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 4.7,
+        "memPercent": 3.7,
+        "rss": 928912,
+        "vsz": 457310512,
+        "time": "0:05.51"
+      }
+    },
+    {
+      "timestamp": 1749363018305,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 168,
+        "usedMemoryMB": 24408,
+        "memoryUsagePercent": 99.31,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.87,
+          "5min": 2.68,
+          "15min": 2.42
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.7,
+        "rss": 928912,
+        "vsz": 457310512,
+        "time": "0:05.51"
+      }
+    },
+    {
+      "timestamp": 1749363019307,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 177,
+        "usedMemoryMB": 24399,
+        "memoryUsagePercent": 99.28,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.87,
+          "5min": 2.68,
+          "15min": 2.42
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.3,
+        "memPercent": 3.7,
+        "rss": 928912,
+        "vsz": 457310512,
+        "time": "0:05.51"
+      }
+    },
+    {
+      "timestamp": 1749363020308,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 178,
+        "usedMemoryMB": 24398,
+        "memoryUsagePercent": 99.27,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.87,
+          "5min": 2.68,
+          "15min": 2.42
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.7,
+        "rss": 928896,
+        "vsz": 457309952,
+        "time": "0:05.51"
+      }
+    },
+    {
+      "timestamp": 1749363021309,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 185,
+        "usedMemoryMB": 24391,
+        "memoryUsagePercent": 99.25,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.87,
+          "5min": 2.68,
+          "15min": 2.42
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.7,
+        "rss": 928896,
+        "vsz": 457309952,
+        "time": "0:05.51"
+      }
+    },
+    {
+      "timestamp": 1749363022310,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 180,
+        "usedMemoryMB": 24396,
+        "memoryUsagePercent": 99.27,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.87,
+          "5min": 2.68,
+          "15min": 2.42
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.7,
+        "rss": 928896,
+        "vsz": 457309952,
+        "time": "0:05.51"
+      }
+    },
+    {
+      "timestamp": 1749363023310,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 184,
+        "usedMemoryMB": 24392,
+        "memoryUsagePercent": 99.25,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 4.12,
+          "5min": 2.75,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.7,
+        "rss": 928896,
+        "vsz": 457309952,
+        "time": "0:05.51"
+      }
+    },
+    {
+      "timestamp": 1749363024310,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 196,
+        "usedMemoryMB": 24380,
+        "memoryUsagePercent": 99.2,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 4.12,
+          "5min": 2.75,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.7,
+        "rss": 928896,
+        "vsz": 457309952,
+        "time": "0:05.51"
+      }
+    },
+    {
+      "timestamp": 1749363025312,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 360,
+        "usedMemoryMB": 24216,
+        "memoryUsagePercent": 98.54,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 4.12,
+          "5min": 2.75,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 40,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363026313,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 363,
+        "usedMemoryMB": 24213,
+        "memoryUsagePercent": 98.52,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 4.12,
+          "5min": 2.75,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.5,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363027313,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 370,
+        "usedMemoryMB": 24206,
+        "memoryUsagePercent": 98.5,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 4.12,
+          "5min": 2.75,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363028315,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 359,
+        "usedMemoryMB": 24217,
+        "memoryUsagePercent": 98.54,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.95,
+          "5min": 2.74,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363029316,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 412,
+        "usedMemoryMB": 24164,
+        "memoryUsagePercent": 98.32,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.95,
+          "5min": 2.74,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363030317,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 405,
+        "usedMemoryMB": 24171,
+        "memoryUsagePercent": 98.35,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.95,
+          "5min": 2.74,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363031317,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 402,
+        "usedMemoryMB": 24174,
+        "memoryUsagePercent": 98.37,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.95,
+          "5min": 2.74,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363032318,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 393,
+        "usedMemoryMB": 24183,
+        "memoryUsagePercent": 98.4,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.95,
+          "5min": 2.74,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363033318,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 415,
+        "usedMemoryMB": 24161,
+        "memoryUsagePercent": 98.31,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.63,
+          "5min": 2.69,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363034320,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 701,
+        "usedMemoryMB": 23875,
+        "memoryUsagePercent": 97.15,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.63,
+          "5min": 2.69,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363035320,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 694,
+        "usedMemoryMB": 23882,
+        "memoryUsagePercent": 97.17,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.63,
+          "5min": 2.69,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363036322,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 704,
+        "usedMemoryMB": 23872,
+        "memoryUsagePercent": 97.14,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.63,
+          "5min": 2.69,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363037323,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 701,
+        "usedMemoryMB": 23875,
+        "memoryUsagePercent": 97.15,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.63,
+          "5min": 2.69,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363038324,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 696,
+        "usedMemoryMB": 23880,
+        "memoryUsagePercent": 97.17,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.34,
+          "5min": 2.65,
+          "15min": 2.41
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363039324,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 704,
+        "usedMemoryMB": 23872,
+        "memoryUsagePercent": 97.14,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.34,
+          "5min": 2.65,
+          "15min": 2.41
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363040325,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 701,
+        "usedMemoryMB": 23875,
+        "memoryUsagePercent": 97.15,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.34,
+          "5min": 2.65,
+          "15min": 2.41
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363041327,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 708,
+        "usedMemoryMB": 23869,
+        "memoryUsagePercent": 97.12,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.34,
+          "5min": 2.65,
+          "15min": 2.41
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363042327,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 701,
+        "usedMemoryMB": 23875,
+        "memoryUsagePercent": 97.15,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.34,
+          "5min": 2.65,
+          "15min": 2.41
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363043328,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 689,
+        "usedMemoryMB": 23887,
+        "memoryUsagePercent": 97.2,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.15,
+          "5min": 2.62,
+          "15min": 2.41
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363044330,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 688,
+        "usedMemoryMB": 23888,
+        "memoryUsagePercent": 97.2,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.15,
+          "5min": 2.62,
+          "15min": 2.41
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 812048,
+        "vsz": 457192144,
+        "time": "0:05.94"
+      }
+    },
+    {
+      "timestamp": 1749363045331,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 660,
+        "usedMemoryMB": 23916,
+        "memoryUsagePercent": 97.31,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.15,
+          "5min": 2.62,
+          "15min": 2.41
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.2,
+        "rss": 817776,
+        "vsz": 457194576,
+        "time": "0:05.98"
+      }
+    },
+    {
+      "timestamp": 1749363046331,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 491,
+        "usedMemoryMB": 24085,
+        "memoryUsagePercent": 98,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.15,
+          "5min": 2.62,
+          "15min": 2.41
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 39.2,
+        "memPercent": 3.9,
+        "rss": 981136,
+        "vsz": 457403216,
+        "time": "0:07.31"
+      }
+    },
+    {
+      "timestamp": 1749363047333,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 490,
+        "usedMemoryMB": 24086,
+        "memoryUsagePercent": 98,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.15,
+          "5min": 2.62,
+          "15min": 2.41
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 2.3,
+        "memPercent": 3.9,
+        "rss": 981424,
+        "vsz": 457403472,
+        "time": "0:07.35"
+      }
+    },
+    {
+      "timestamp": 1749363048333,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 483,
+        "usedMemoryMB": 24093,
+        "memoryUsagePercent": 98.03,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.06,
+          "5min": 2.61,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 1,
+        "memPercent": 3.9,
+        "rss": 985392,
+        "vsz": 457405968,
+        "time": "0:07.39"
+      }
+    },
+    {
+      "timestamp": 1749363049334,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 476,
+        "usedMemoryMB": 24100,
+        "memoryUsagePercent": 98.06,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.06,
+          "5min": 2.61,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.3,
+        "memPercent": 3.9,
+        "rss": 985520,
+        "vsz": 457405968,
+        "time": "0:07.39"
+      }
+    },
+    {
+      "timestamp": 1749363050335,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 479,
+        "usedMemoryMB": 24097,
+        "memoryUsagePercent": 98.05,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.06,
+          "5min": 2.61,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.9,
+        "rss": 985520,
+        "vsz": 457405968,
+        "time": "0:07.39"
+      }
+    },
+    {
+      "timestamp": 1749363051336,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 479,
+        "usedMemoryMB": 24097,
+        "memoryUsagePercent": 98.05,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.06,
+          "5min": 2.61,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.9,
+        "rss": 985520,
+        "vsz": 457405968,
+        "time": "0:07.39"
+      }
+    },
+    {
+      "timestamp": 1749363052338,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 469,
+        "usedMemoryMB": 24107,
+        "memoryUsagePercent": 98.09,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.06,
+          "5min": 2.61,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.9,
+        "rss": 985536,
+        "vsz": 457405968,
+        "time": "0:07.40"
+      }
+    },
+    {
+      "timestamp": 1749363053340,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 470,
+        "usedMemoryMB": 24106,
+        "memoryUsagePercent": 98.09,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.89,
+          "5min": 2.58,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.9,
+        "rss": 985536,
+        "vsz": 457405968,
+        "time": "0:07.40"
+      }
+    },
+    {
+      "timestamp": 1749363054340,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 341,
+        "usedMemoryMB": 24235,
+        "memoryUsagePercent": 98.61,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.89,
+          "5min": 2.58,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 20.9,
+        "memPercent": 3.8,
+        "rss": 949104,
+        "vsz": 457500240,
+        "time": "0:07.66"
+      }
+    },
+    {
+      "timestamp": 1749363055342,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 348,
+        "usedMemoryMB": 24228,
+        "memoryUsagePercent": 98.59,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.89,
+          "5min": 2.58,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 9.6,
+        "memPercent": 3.8,
+        "rss": 953520,
+        "vsz": 457502784,
+        "time": "0:07.93"
+      }
+    },
+    {
+      "timestamp": 1749363056341,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 281,
+        "usedMemoryMB": 24295,
+        "memoryUsagePercent": 98.86,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.89,
+          "5min": 2.58,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.4,
+        "memPercent": 3.8,
+        "rss": 958848,
+        "vsz": 457511376,
+        "time": "0:07.96"
+      }
+    },
+    {
+      "timestamp": 1749363057343,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 279,
+        "usedMemoryMB": 24297,
+        "memoryUsagePercent": 98.87,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.89,
+          "5min": 2.58,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 958848,
+        "vsz": 457511376,
+        "time": "0:07.96"
+      }
+    },
+    {
+      "timestamp": 1749363058344,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 267,
+        "usedMemoryMB": 24309,
+        "memoryUsagePercent": 98.92,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.9,
+          "5min": 2.59,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 958848,
+        "vsz": 457511376,
+        "time": "0:07.96"
+      }
+    },
+    {
+      "timestamp": 1749363059344,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 348,
+        "usedMemoryMB": 24228,
+        "memoryUsagePercent": 98.58,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.9,
+          "5min": 2.59,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 1.3,
+        "memPercent": 3.8,
+        "rss": 958880,
+        "vsz": 457511376,
+        "time": "0:07.97"
+      }
+    },
+    {
+      "timestamp": 1749363060345,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 328,
+        "usedMemoryMB": 24248,
+        "memoryUsagePercent": 98.67,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.9,
+          "5min": 2.59,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.7,
+        "memPercent": 3.8,
+        "rss": 959008,
+        "vsz": 457511376,
+        "time": "0:07.98"
+      }
+    },
+    {
+      "timestamp": 1749363061346,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 317,
+        "usedMemoryMB": 24259,
+        "memoryUsagePercent": 98.71,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.9,
+          "5min": 2.59,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 959008,
+        "vsz": 457511376,
+        "time": "0:07.98"
+      }
+    },
+    {
+      "timestamp": 1749363062348,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 311,
+        "usedMemoryMB": 24265,
+        "memoryUsagePercent": 98.73,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.9,
+          "5min": 2.59,
+          "15min": 2.4
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 959008,
+        "vsz": 457511376,
+        "time": "0:07.98"
+      }
+    },
+    {
+      "timestamp": 1749363063349,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 176,
+        "usedMemoryMB": 24400,
+        "memoryUsagePercent": 99.28,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.39,
+          "5min": 2.7,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 959008,
+        "vsz": 457511376,
+        "time": "0:07.98"
+      }
+    },
+    {
+      "timestamp": 1749363064350,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 152,
+        "usedMemoryMB": 24424,
+        "memoryUsagePercent": 99.38,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.39,
+          "5min": 2.7,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.1,
+        "memPercent": 3.8,
+        "rss": 959008,
+        "vsz": 457511376,
+        "time": "0:07.98"
+      }
+    },
+    {
+      "timestamp": 1749363065350,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 118,
+        "usedMemoryMB": 24458,
+        "memoryUsagePercent": 99.52,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.39,
+          "5min": 2.7,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 2,
+        "memPercent": 3.8,
+        "rss": 960496,
+        "vsz": 457511376,
+        "time": "0:08.00"
+      }
+    },
+    {
+      "timestamp": 1749363066351,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 181,
+        "usedMemoryMB": 24395,
+        "memoryUsagePercent": 99.26,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.39,
+          "5min": 2.7,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 2.1,
+        "memPercent": 3.8,
+        "rss": 960496,
+        "vsz": 457511376,
+        "time": "0:08.01"
+      }
+    },
+    {
+      "timestamp": 1749363067352,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 183,
+        "usedMemoryMB": 24393,
+        "memoryUsagePercent": 99.26,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.39,
+          "5min": 2.7,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 5,
+        "memPercent": 3.8,
+        "rss": 962464,
+        "vsz": 457511376,
+        "time": "0:08.09"
+      }
+    },
+    {
+      "timestamp": 1749363068354,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 92,
+        "usedMemoryMB": 24484,
+        "memoryUsagePercent": 99.63,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.28,
+          "5min": 2.69,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.7,
+        "memPercent": 3.9,
+        "rss": 970160,
+        "vsz": 457518080,
+        "time": "0:08.13"
+      }
+    },
+    {
+      "timestamp": 1749363069354,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 75,
+        "usedMemoryMB": 24501,
+        "memoryUsagePercent": 99.69,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.28,
+          "5min": 2.69,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.1,
+        "memPercent": 3.8,
+        "rss": 949104,
+        "vsz": 457518080,
+        "time": "0:08.13"
+      }
+    },
+    {
+      "timestamp": 1749363070355,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 84,
+        "usedMemoryMB": 24492,
+        "memoryUsagePercent": 99.66,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.28,
+          "5min": 2.69,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 946192,
+        "vsz": 457518080,
+        "time": "0:08.13"
+      }
+    },
+    {
+      "timestamp": 1749363071357,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 79,
+        "usedMemoryMB": 24497,
+        "memoryUsagePercent": 99.68,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.28,
+          "5min": 2.69,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 946192,
+        "vsz": 457518080,
+        "time": "0:08.13"
+      }
+    },
+    {
+      "timestamp": 1749363072357,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 276,
+        "usedMemoryMB": 24300,
+        "memoryUsagePercent": 98.88,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.28,
+          "5min": 2.69,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 14.9,
+        "memPercent": 3.7,
+        "rss": 942176,
+        "vsz": 457513952,
+        "time": "0:08.40"
+      }
+    },
+    {
+      "timestamp": 1749363073357,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 149,
+        "usedMemoryMB": 24427,
+        "memoryUsagePercent": 99.39,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.42,
+          "5min": 2.72,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 3.9,
+        "memPercent": 3.8,
+        "rss": 948944,
+        "vsz": 457520704,
+        "time": "0:08.46"
+      }
+    },
+    {
+      "timestamp": 1749363074358,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 111,
+        "usedMemoryMB": 24465,
+        "memoryUsagePercent": 99.55,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.42,
+          "5min": 2.72,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.1,
+        "memPercent": 3.8,
+        "rss": 948944,
+        "vsz": 457520704,
+        "time": "0:08.46"
+      }
+    },
+    {
+      "timestamp": 1749363075359,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 80,
+        "usedMemoryMB": 24496,
+        "memoryUsagePercent": 99.67,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.42,
+          "5min": 2.72,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 948944,
+        "vsz": 457520704,
+        "time": "0:08.46"
+      }
+    },
+    {
+      "timestamp": 1749363076359,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 77,
+        "usedMemoryMB": 24499,
+        "memoryUsagePercent": 99.69,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.42,
+          "5min": 2.72,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 948944,
+        "vsz": 457520704,
+        "time": "0:08.46"
+      }
+    },
+    {
+      "timestamp": 1749363077360,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 184,
+        "usedMemoryMB": 24392,
+        "memoryUsagePercent": 99.25,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.42,
+          "5min": 2.72,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 7.4,
+        "memPercent": 3.8,
+        "rss": 954512,
+        "vsz": 457535872,
+        "time": "0:08.53"
+      }
+    },
+    {
+      "timestamp": 1749363078361,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 195,
+        "usedMemoryMB": 24381,
+        "memoryUsagePercent": 99.21,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.22,
+          "5min": 2.69,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 4.2,
+        "memPercent": 3.8,
+        "rss": 960960,
+        "vsz": 457536016,
+        "time": "0:08.59"
+      }
+    },
+    {
+      "timestamp": 1749363079363,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 179,
+        "usedMemoryMB": 24397,
+        "memoryUsagePercent": 99.27,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.22,
+          "5min": 2.69,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 4.8,
+        "memPercent": 3.8,
+        "rss": 963632,
+        "vsz": 457538384,
+        "time": "0:08.63"
+      }
+    },
+    {
+      "timestamp": 1749363080363,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 77,
+        "usedMemoryMB": 24499,
+        "memoryUsagePercent": 99.69,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.22,
+          "5min": 2.69,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.8,
+        "memPercent": 3.9,
+        "rss": 969040,
+        "vsz": 457543504,
+        "time": "0:08.66"
+      }
+    },
+    {
+      "timestamp": 1749363081364,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 135,
+        "usedMemoryMB": 24441,
+        "memoryUsagePercent": 99.45,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.22,
+          "5min": 2.69,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 3.9,
+        "memPercent": 3.8,
+        "rss": 962096,
+        "vsz": 457536416,
+        "time": "0:08.68"
+      }
+    },
+    {
+      "timestamp": 1749363082366,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 131,
+        "usedMemoryMB": 24445,
+        "memoryUsagePercent": 99.47,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.22,
+          "5min": 2.69,
+          "15min": 2.44
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 2.4,
+        "memPercent": 3.8,
+        "rss": 964416,
+        "vsz": 457538720,
+        "time": "0:08.70"
+      }
+    },
+    {
+      "timestamp": 1749363083366,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 201,
+        "usedMemoryMB": 24375,
+        "memoryUsagePercent": 99.18,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.96,
+          "5min": 2.65,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 1.7,
+        "memPercent": 3.8,
+        "rss": 964720,
+        "vsz": 457539216,
+        "time": "0:08.71"
+      }
+    },
+    {
+      "timestamp": 1749363084367,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 278,
+        "usedMemoryMB": 24298,
+        "memoryUsagePercent": 98.87,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.96,
+          "5min": 2.65,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 1.9,
+        "memPercent": 3.8,
+        "rss": 962928,
+        "vsz": 457537376,
+        "time": "0:08.74"
+      }
+    },
+    {
+      "timestamp": 1749363085368,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 278,
+        "usedMemoryMB": 24298,
+        "memoryUsagePercent": 98.87,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.96,
+          "5min": 2.65,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.4,
+        "memPercent": 3.8,
+        "rss": 962992,
+        "vsz": 457537376,
+        "time": "0:08.75"
+      }
+    },
+    {
+      "timestamp": 1749363086369,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 275,
+        "usedMemoryMB": 24301,
+        "memoryUsagePercent": 98.88,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.96,
+          "5min": 2.65,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 962992,
+        "vsz": 457537376,
+        "time": "0:08.75"
+      }
+    },
+    {
+      "timestamp": 1749363087370,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 279,
+        "usedMemoryMB": 24297,
+        "memoryUsagePercent": 98.87,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.96,
+          "5min": 2.65,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 962992,
+        "vsz": 457537376,
+        "time": "0:08.75"
+      }
+    },
+    {
+      "timestamp": 1749363088370,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 273,
+        "usedMemoryMB": 24303,
+        "memoryUsagePercent": 98.89,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.97,
+          "5min": 2.66,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 962992,
+        "vsz": 457537376,
+        "time": "0:08.75"
+      }
+    },
+    {
+      "timestamp": 1749363089371,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 266,
+        "usedMemoryMB": 24310,
+        "memoryUsagePercent": 98.92,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.97,
+          "5min": 2.66,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 962992,
+        "vsz": 457537376,
+        "time": "0:08.75"
+      }
+    },
+    {
+      "timestamp": 1749363090371,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 255,
+        "usedMemoryMB": 24321,
+        "memoryUsagePercent": 98.96,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.97,
+          "5min": 2.66,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 3.5,
+        "memPercent": 3.8,
+        "rss": 963120,
+        "vsz": 457537888,
+        "time": "0:08.80"
+      }
+    },
+    {
+      "timestamp": 1749363091372,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 243,
+        "usedMemoryMB": 24333,
+        "memoryUsagePercent": 99.01,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.97,
+          "5min": 2.66,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 3.6,
+        "memPercent": 3.8,
+        "rss": 965728,
+        "vsz": 457540112,
+        "time": "0:08.83"
+      }
+    },
+    {
+      "timestamp": 1749363092373,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 235,
+        "usedMemoryMB": 24341,
+        "memoryUsagePercent": 99.04,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 2.97,
+          "5min": 2.66,
+          "15min": 2.43
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 965728,
+        "vsz": 457540112,
+        "time": "0:08.83"
+      }
+    },
+    {
+      "timestamp": 1749363093375,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 235,
+        "usedMemoryMB": 24341,
+        "memoryUsagePercent": 99.04,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.21,
+          "5min": 2.71,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 965728,
+        "vsz": 457540112,
+        "time": "0:08.83"
+      }
+    },
+    {
+      "timestamp": 1749363094375,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 522,
+        "usedMemoryMB": 24054,
+        "memoryUsagePercent": 97.87,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.21,
+          "5min": 2.71,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 965728,
+        "vsz": 457540112,
+        "time": "0:08.83"
+      }
+    },
+    {
+      "timestamp": 1749363095376,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 521,
+        "usedMemoryMB": 24055,
+        "memoryUsagePercent": 97.88,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.21,
+          "5min": 2.71,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0.6,
+        "memPercent": 3.8,
+        "rss": 965760,
+        "vsz": 457540112,
+        "time": "0:08.84"
+      }
+    },
+    {
+      "timestamp": 1749363096377,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 580,
+        "usedMemoryMB": 23996,
+        "memoryUsagePercent": 97.64,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.21,
+          "5min": 2.71,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 965760,
+        "vsz": 457540112,
+        "time": "0:08.84"
+      }
+    },
+    {
+      "timestamp": 1749363097378,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 573,
+        "usedMemoryMB": 24003,
+        "memoryUsagePercent": 97.67,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.21,
+          "5min": 2.71,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 965760,
+        "vsz": 457540112,
+        "time": "0:08.85"
+      }
+    },
+    {
+      "timestamp": 1749363098379,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 586,
+        "usedMemoryMB": 23990,
+        "memoryUsagePercent": 97.62,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.19,
+          "5min": 2.71,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 965760,
+        "vsz": 457540112,
+        "time": "0:08.85"
+      }
+    },
+    {
+      "timestamp": 1749363099381,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 589,
+        "usedMemoryMB": 23987,
+        "memoryUsagePercent": 97.6,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.19,
+          "5min": 2.71,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 965760,
+        "vsz": 457540112,
+        "time": "0:08.85"
+      }
+    },
+    {
+      "timestamp": 1749363100381,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 587,
+        "usedMemoryMB": 23989,
+        "memoryUsagePercent": 97.61,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.19,
+          "5min": 2.71,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 965760,
+        "vsz": 457540112,
+        "time": "0:08.85"
+      }
+    },
+    {
+      "timestamp": 1749363101382,
+      "system": {
+        "totalMemoryMB": 24576,
+        "freeMemoryMB": 587,
+        "usedMemoryMB": 23989,
+        "memoryUsagePercent": 97.61,
+        "cpuCount": 10,
+        "loadAverage": {
+          "1min": 3.19,
+          "5min": 2.71,
+          "15min": 2.45
+        }
+      },
+      "process": {
+        "pid": 38948,
+        "cpuPercent": 0,
+        "memPercent": 3.8,
+        "rss": 965760,
+        "vsz": 457540112,
+        "time": "0:08.85"
+      }
+    }
+  ]
+}
