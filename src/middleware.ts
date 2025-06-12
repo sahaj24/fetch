@@ -48,8 +48,8 @@ export const config = {
     '/profile/:path*',
     '/subtitles/manage/:path*',
     // Auth routes
-    '/auth/:path*',
-    // Explicitly exclude API routes to prevent interference
-    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'
+    '/auth/:path*'
+    // Note: API routes (/api/*) are automatically excluded by Next.js
+    // when not explicitly listed in the matcher array
   ],
 }
