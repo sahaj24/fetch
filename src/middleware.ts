@@ -48,6 +48,8 @@ export const config = {
     '/profile/:path*',
     '/subtitles/manage/:path*',
     // Auth routes
-    '/auth/:path*'
+    '/auth/:path*',
+    // Explicitly exclude API routes to prevent interference
+    '/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'
   ],
 }
