@@ -861,19 +861,30 @@ export async function getPlaylistVideoIds(
       timeout: methodTimeout, // DO NOT CHANGE: Use full 2-hour timeout
       env: { ...process.env, PYTHONPATH: '/usr/local/lib/python3.9/site-packages' }
     });
-    
-    if (stdout && stdout.trim()) {
-      const data = JSON.parse(stdout);
-      if (data && data.entries) {
-        const videoIds = data.entries.map((entry: any) => entry.id).filter((id: string) => id && id.length === 11);
-        if (videoIds.length > 0) {
-          console.log(`✅ [PRODUCTION] Alternative yt-dlp success: Found ${videoIds.length} videos`);
-          return videoIds;
-        } else {
-          errors.push(`Alternative yt-dlp returned no valid video IDs from ${data.entries?.length || 0} entries`);
-        }
+      if (stdout && stdout.trim()) {
+      // Check if the output looks like HTML instead of JSON
+      if (stdout.trim().startsWith('<html') || stdout.trim().startsWith('<!DOCTYPE')) {
+        console.log(`⚠️ [PRODUCTION] yt-dlp returned HTML instead of JSON - likely an error page`);
+        errors.push('Alternative yt-dlp returned HTML error page instead of JSON');
       } else {
-        errors.push(`Alternative yt-dlp returned invalid JSON structure: ${JSON.stringify(data).substring(0, 100)}`);
+        try {
+          const data = JSON.parse(stdout);
+          if (data && data.entries) {
+            const videoIds = data.entries.map((entry: any) => entry.id).filter((id: string) => id && id.length === 11);
+            if (videoIds.length > 0) {
+              console.log(`✅ [PRODUCTION] Alternative yt-dlp success: Found ${videoIds.length} videos`);
+              return videoIds;
+            } else {
+              errors.push(`Alternative yt-dlp returned no valid video IDs from ${data.entries?.length || 0} entries`);
+            }
+          } else {
+            errors.push(`Alternative yt-dlp returned invalid JSON structure: ${JSON.stringify(data).substring(0, 100)}`);
+          }
+        } catch (parseError) {
+          console.log(`⚠️ [PRODUCTION] Failed to parse yt-dlp output as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+          console.log(`📄 [PRODUCTION] Raw output (first 200 chars): ${stdout.substring(0, 200)}`);
+          errors.push(`Alternative yt-dlp returned invalid JSON: ${parseError instanceof Error ? parseError.message : 'Parse error'}`);
+        }
       }
     } else {
       errors.push('Alternative yt-dlp returned empty output');

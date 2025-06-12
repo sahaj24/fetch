@@ -29,10 +29,10 @@ const CACHE_TTL_ESTIMATE = 30 * 60 * 1000; // 30 minutes
  * Endpoint to get YouTube playlist information quickly and efficiently
  */
 export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const playlistId = url.searchParams.get('id');
+  
   try {
-    const url = new URL(request.url);
-    const playlistId = url.searchParams.get('id');
-    
     if (!playlistId) {
       return NextResponse.json(
         { error: 'Playlist ID is required' },
@@ -165,7 +165,25 @@ async function getPlaylistInfoFromYtDlp(playlistId: string): Promise<PlaylistInf
       { timeout: 8000 }
     );
     
-    const data = JSON.parse(stdout);
+    // Check if the output looks like HTML instead of JSON
+    if (!stdout || !stdout.trim()) {
+      console.log('yt-dlp returned empty output');
+      return null;
+    }
+    
+    if (stdout.trim().startsWith('<html') || stdout.trim().startsWith('<!DOCTYPE')) {
+      console.log('yt-dlp returned HTML instead of JSON - likely an error page');
+      return null;
+    }
+    
+    let data;
+    try {
+      data = JSON.parse(stdout);
+    } catch (parseError) {
+      console.log(`Failed to parse yt-dlp output as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
+      console.log(`Raw output (first 200 chars): ${stdout.substring(0, 200)}`);
+      return null;
+    }
     
     if (!data || !data.title) {
       return null;
