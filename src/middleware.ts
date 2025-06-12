@@ -4,6 +4,20 @@ import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 
 // This middleware handles authentication for protected routes
 export async function middleware(req: NextRequest) {
+  // Skip API routes entirely to prevent HTML responses
+  if (req.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.next();
+  }
+  
+  // Also skip static files and Next.js internal routes
+  if (
+    req.nextUrl.pathname.startsWith('/_next/') ||
+    req.nextUrl.pathname.startsWith('/favicon.ico') ||
+    req.nextUrl.pathname.match(/\.(svg|png|jpg|jpeg|gif|webp|ico)$/)
+  ) {
+    return NextResponse.next();
+  }
+  
   // Create supabase server client
   const res = NextResponse.next();
   const supabase = createMiddlewareClient({ req, res });
@@ -42,14 +56,11 @@ export async function middleware(req: NextRequest) {
 // Configure which paths this middleware applies to
 export const config = {
   matcher: [
-    // Protected routes
+    // Only apply to specific protected and auth routes - NO API ROUTES
     '/dashboard/:path*',
-    '/settings/:path*',
+    '/settings/:path*', 
     '/profile/:path*',
     '/subtitles/manage/:path*',
-    // Auth routes
     '/auth/:path*'
-    // Note: API routes (/api/*) are automatically excluded by Next.js
-    // when not explicitly listed in the matcher array
   ],
 }
