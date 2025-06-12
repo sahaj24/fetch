@@ -44,8 +44,8 @@ const SITE_ROUTING_CONFIG = {
   // More conservative limits for site-routed requests
   MAX_CONCURRENT_SITE_ROUTED: 1,
   MAX_VIDEOS_SITE_ROUTED: 200, // Increased to 200 to handle very large playlists
-  TIMEOUT_SITE_ROUTED: 30000, // 30 seconds for site-routed requests (reduced from 2 hours)
-  TIMEOUT_DIRECT: 60000, // 60 seconds for direct requests (reduced from 2 hours)
+  TIMEOUT_SITE_ROUTED: 7200000, // DO NOT CHANGE: 2 hours for site-routed requests (playlist processing needs time)
+  TIMEOUT_DIRECT: 7200000, // DO NOT CHANGE: 2 hours for direct requests (playlist processing needs time)
 };
 
 // Function to detect if request is coming through site routing

@@ -698,10 +698,11 @@ export function getLanguageName(code: string): string {
     return languages[code] || code;
 }
 
-// Function to fetch video IDs from a YouTube playlist using multiple robust methods
+// DO NOT CHANGE: Function to fetch video IDs from a YouTube playlist using multiple robust methods
+// TIMEOUT CONFIGURATION: Keep at 2 hours (7200000ms) - DO NOT REDUCE
 export async function getPlaylistVideoIds(
   playlistId: string, 
-  timeout: number = 7200000,
+  timeout: number = 7200000, // DO NOT CHANGE: 2 hours timeout required for large playlists
   isSiteRouted: boolean = false
 ): Promise<string[]> {
   console.log(`🎵 [PRODUCTION] Starting playlist processing for ID: ${playlistId}`);
@@ -713,15 +714,9 @@ export async function getPlaylistVideoIds(
   const isProduction = process.env.NODE_ENV === 'production';
   const isCloudEnvironment = process.env.VERCEL || process.env.NETLIFY || process.env.HEROKU || process.env.RAILWAY;
   
-  // Use much shorter timeouts in production/cloud environments to prevent hanging
-  let methodTimeout = timeout;
-  if (isProduction && isCloudEnvironment) {
-    methodTimeout = Math.min(10000, timeout); // Max 10 seconds per method in cloud
-    console.log(`⏰ [PRODUCTION] Reducing method timeout to ${methodTimeout}ms for cloud environment`);
-  } else if (isProduction) {
-    methodTimeout = Math.min(15000, timeout); // Max 15 seconds per method in production
-    console.log(`⏰ [PRODUCTION] Reducing method timeout to ${methodTimeout}ms for production`);
-  }
+  // DO NOT CHANGE: Use full timeout for all methods - playlist processing needs time
+  let methodTimeout = timeout; // Keep original timeout, don't reduce
+  console.log(`⏰ [PRODUCTION] Using full timeout of ${methodTimeout}ms for playlist processing`);
   
   if (isProduction) {
     console.log(`☁️ [PRODUCTION] Cloud environment detected: ${JSON.stringify({
@@ -732,19 +727,18 @@ export async function getPlaylistVideoIds(
       NODE_ENV: process.env.NODE_ENV,
       YOUTUBE_API_KEY_AVAILABLE: !!process.env.YOUTUBE_API_KEY,
       isSiteRouted,
-      originalTimeoutMs: timeout,
-      methodTimeoutMs: methodTimeout
+      timeoutMs: timeout
     })}`);
   }
   
   // Enhanced error tracking for production
   const errors: string[] = [];
-    // Method 1: Try YouTube Data API v3 (most reliable if API key is available)
+  // Method 1: Try YouTube Data API v3 (most reliable if API key is available)
   if (process.env.YOUTUBE_API_KEY) {
     console.log('📡 [PRODUCTION] Attempting YouTube Data API method...');
     try {      const youtubeApiUrl = `https://www.googleapis.com/youtube/v3/playlistItems?part=snippet&maxResults=200&playlistId=${playlistId}&key=${process.env.YOUTUBE_API_KEY}`;
       const response = await axios.get(youtubeApiUrl, { 
-        timeout: methodTimeout, // Use reduced timeout for production
+        timeout: methodTimeout, // DO NOT CHANGE: Use full 2-hour timeout
         headers: {
           'User-Agent': 'fetchsub.com/1.0 (YouTube Transcript Service)',
           'Accept': 'application/json'
@@ -779,63 +773,57 @@ export async function getPlaylistVideoIds(
     console.log('⚠️ [PRODUCTION] YouTube API key not available, skipping API method');
     errors.push('YouTube API key not available');
   }  
-  // Method 2: Skip yt-dlp in cloud environments due to tool availability issues
-  if (isCloudEnvironment) {
-    console.log('⏭️ [PRODUCTION] Skipping yt-dlp methods in cloud environment (tool likely unavailable)');
-    errors.push('yt-dlp skipped in cloud environment');
-  } else {
-    // Method 2: Try yt-dlp (fast and reliable if available) - Modified for production
-    console.log('🔧 [PRODUCTION] Attempting yt-dlp method...');
+  // Method 2: Try yt-dlp (DO NOT SKIP - needed for playlist processing)
+  console.log('🔧 [PRODUCTION] Attempting yt-dlp method...');
+  try {
+    // First check if yt-dlp is available
     try {
-      // First check if yt-dlp is available
-      try {
-        await execPromise('which yt-dlp', { timeout: 5000 });
-        console.log('✅ [PRODUCTION] yt-dlp binary found');
-      } catch (whichError) {
-        console.log('⚠️ [PRODUCTION] yt-dlp binary not found, trying alternative paths...');
-        // Try common installation paths
-        const possiblePaths = ['/usr/local/bin/yt-dlp', '/usr/bin/yt-dlp', './node_modules/.bin/yt-dlp'];
-        let found = false;
-        for (const ytPath of possiblePaths) {
-          try {
-            await execPromise(`${ytPath} --version`, { timeout: 5000 });
-            console.log(`✅ [PRODUCTION] yt-dlp found at: ${ytPath}`);
-            found = true;
-            break;
-          } catch {}
-        }
-        if (!found) {
-          throw new Error('yt-dlp not found in any standard location');
-        }
+      await execPromise('which yt-dlp', { timeout: 5000 });
+      console.log('✅ [PRODUCTION] yt-dlp binary found');
+    } catch (whichError) {
+      console.log('⚠️ [PRODUCTION] yt-dlp binary not found, trying alternative paths...');
+      // Try common installation paths
+      const possiblePaths = ['/usr/local/bin/yt-dlp', '/usr/bin/yt-dlp', './node_modules/.bin/yt-dlp'];
+      let found = false;
+      for (const ytPath of possiblePaths) {
+        try {
+          await execPromise(`${ytPath} --version`, { timeout: 5000 });
+          console.log(`✅ [PRODUCTION] yt-dlp found at: ${ytPath}`);
+          found = true;
+          break;
+        } catch {}
       }
-        const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
-      const cmd = `yt-dlp --flat-playlist --print id "${playlistUrl}"`;
-      console.log(`🔧 [PRODUCTION] Running command: ${cmd} (timeout: ${methodTimeout}ms)`);
-        const { stdout } = await execPromise(cmd, { 
-        timeout: methodTimeout, // Use reduced timeout
-        env: { ...process.env, PYTHONPATH: '/usr/local/lib/python3.9/site-packages' }
-      });
-      
-      if (stdout && stdout.trim()) {
-        const videoIds = stdout.trim().split('\n').filter((id: string) => id.length === 11);
-        if (videoIds.length > 0) {
-          console.log(`✅ [PRODUCTION] yt-dlp success: Found ${videoIds.length} videos`);
-          return videoIds;
-        } else {
-          errors.push(`yt-dlp returned no valid video IDs: ${stdout.substring(0, 100)}`);
-        }
-      } else {
-        errors.push('yt-dlp returned empty output');
+      if (!found) {
+        throw new Error('yt-dlp not found in any standard location');
       }
-    } catch (ytdlpError) {
-      const errorMsg = ytdlpError instanceof Error ? ytdlpError.message : 'Unknown error';
-      console.log(`⚠️ [PRODUCTION] yt-dlp failed: ${errorMsg}`);
-      errors.push(`yt-dlp: ${errorMsg}`);
     }
+      const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
+    const cmd = `yt-dlp --flat-playlist --print id "${playlistUrl}"`;
+    console.log(`🔧 [PRODUCTION] Running command: ${cmd} (timeout: ${methodTimeout}ms)`);
+      const { stdout } = await execPromise(cmd, { 
+      timeout: methodTimeout, // DO NOT CHANGE: Use full 2-hour timeout
+      env: { ...process.env, PYTHONPATH: '/usr/local/lib/python3.9/site-packages' }
+    });
+    
+    if (stdout && stdout.trim()) {
+      const videoIds = stdout.trim().split('\n').filter((id: string) => id.length === 11);
+      if (videoIds.length > 0) {
+        console.log(`✅ [PRODUCTION] yt-dlp success: Found ${videoIds.length} videos`);
+        return videoIds;
+      } else {
+        errors.push(`yt-dlp returned no valid video IDs: ${stdout.substring(0, 100)}`);
+      }
+    } else {
+      errors.push('yt-dlp returned empty output');
+    }
+  } catch (ytdlpError) {
+    const errorMsg = ytdlpError instanceof Error ? ytdlpError.message : 'Unknown error';
+    console.log(`⚠️ [PRODUCTION] yt-dlp failed: ${errorMsg}`);
+    errors.push(`yt-dlp: ${errorMsg}`);
   }    // Method 3: Try web scraping (works in most environments) - Enhanced for production
   console.log('🌐 [PRODUCTION] Attempting web scraping method...');
   try {
-    const videoIds = await getPlaylistVideoIdsWithWebFetch(playlistId, methodTimeout);
+    const videoIds = await getPlaylistVideoIdsWithWebFetch(playlistId, methodTimeout); // DO NOT CHANGE: Use full timeout
     if (videoIds.length > 0) {
       console.log(`✅ [PRODUCTION] Web scraping success: Found ${videoIds.length} videos`);
       return videoIds;
@@ -847,43 +835,37 @@ export async function getPlaylistVideoIds(
     console.log(`⚠️ [PRODUCTION] Web scraping failed: ${errorMsg}`);
     errors.push(`Web scraping: ${errorMsg}`);
   }  
-  // Method 4: Skip alternative yt-dlp in cloud environments
-  if (isCloudEnvironment) {
-    console.log('⏭️ [PRODUCTION] Skipping alternative yt-dlp method in cloud environment');
-    errors.push('Alternative yt-dlp skipped in cloud environment');
-  } else {
-    // Method 4: Try alternative yt-dlp approach with different flags
-    console.log('🔧 [PRODUCTION] Attempting alternative yt-dlp method...');
-    try {
-      const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
-      const cmd = `yt-dlp --flat-playlist --no-warnings --skip-download --dump-single-json "${playlistUrl}"`;
-      console.log(`🔧 [PRODUCTION] Running alternative command: ${cmd}`);
-        const { stdout } = await execPromise(cmd, { 
-        timeout: methodTimeout, // Use reduced timeout
-        env: { ...process.env, PYTHONPATH: '/usr/local/lib/python3.9/site-packages' }
-      });
-      
-      if (stdout && stdout.trim()) {
-        const data = JSON.parse(stdout);
-        if (data && data.entries) {
-          const videoIds = data.entries.map((entry: any) => entry.id).filter((id: string) => id && id.length === 11);
-          if (videoIds.length > 0) {
-            console.log(`✅ [PRODUCTION] Alternative yt-dlp success: Found ${videoIds.length} videos`);
-            return videoIds;
-          } else {
-            errors.push(`Alternative yt-dlp returned no valid video IDs from ${data.entries?.length || 0} entries`);
-          }
+  // Method 4: Try alternative yt-dlp approach with different flags (DO NOT SKIP)
+  console.log('🔧 [PRODUCTION] Attempting alternative yt-dlp method...');
+  try {
+    const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
+    const cmd = `yt-dlp --flat-playlist --no-warnings --skip-download --dump-single-json "${playlistUrl}"`;
+    console.log(`🔧 [PRODUCTION] Running alternative command: ${cmd}`);
+      const { stdout } = await execPromise(cmd, { 
+      timeout: methodTimeout, // DO NOT CHANGE: Use full 2-hour timeout
+      env: { ...process.env, PYTHONPATH: '/usr/local/lib/python3.9/site-packages' }
+    });
+    
+    if (stdout && stdout.trim()) {
+      const data = JSON.parse(stdout);
+      if (data && data.entries) {
+        const videoIds = data.entries.map((entry: any) => entry.id).filter((id: string) => id && id.length === 11);
+        if (videoIds.length > 0) {
+          console.log(`✅ [PRODUCTION] Alternative yt-dlp success: Found ${videoIds.length} videos`);
+          return videoIds;
         } else {
-          errors.push(`Alternative yt-dlp returned invalid JSON structure: ${JSON.stringify(data).substring(0, 100)}`);
+          errors.push(`Alternative yt-dlp returned no valid video IDs from ${data.entries?.length || 0} entries`);
         }
       } else {
-        errors.push('Alternative yt-dlp returned empty output');
+        errors.push(`Alternative yt-dlp returned invalid JSON structure: ${JSON.stringify(data).substring(0, 100)}`);
       }
-    } catch (altYtdlpError) {
-      const errorMsg = altYtdlpError instanceof Error ? altYtdlpError.message : 'Unknown error';
-      console.log(`⚠️ [PRODUCTION] Alternative yt-dlp failed: ${errorMsg}`);
-      errors.push(`Alternative yt-dlp: ${errorMsg}`);
+    } else {
+      errors.push('Alternative yt-dlp returned empty output');
     }
+  } catch (altYtdlpError) {
+    const errorMsg = altYtdlpError instanceof Error ? altYtdlpError.message : 'Unknown error';
+    console.log(`⚠️ [PRODUCTION] Alternative yt-dlp failed: ${errorMsg}`);
+    errors.push(`Alternative yt-dlp: ${errorMsg}`);
   }
   
   // Method 5: Final fallback to sample videos (always works)
