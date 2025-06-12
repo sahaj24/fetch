@@ -86,13 +86,29 @@ async function getPlaylistInfoFast(playlistId: string): Promise<PlaylistInfo> {
     }
   }
 
-  // Method 2: Try yt-dlp (fast and reliable)
+  // Method 2: Use new robust playlist processor (no external commands or JSON parsing)
   try {
-    const result = await getPlaylistInfoFromYtDlp(playlistId);
-    if (result && result.videoCount > 0) {
+    console.log('🆕 [PLAYLIST-INFO] Using new robust processor for playlist info');
+    
+    // Import the new processor that eliminates JSON parsing issues
+    const { NewPlaylistProcessor } = await import('../extract/newPlaylistProcessor');
+    
+    // Get the video IDs using the robust processor
+    const videoIds = await NewPlaylistProcessor.getPlaylistVideoIds(playlistId);
+    
+    if (videoIds && videoIds.length > 0) {
+      // Create playlist info from the successful video extraction
+      const result: PlaylistInfo = {
+        title: "YouTube Playlist", // Default title - will be enhanced later if needed
+        videoCount: videoIds.length,
+        isEstimate: false
+      };
+      
+      console.log(`✅ [PLAYLIST-INFO] New processor success: ${videoIds.length} videos`);
       return result;
     }
   } catch (error) {
+    console.error('⚠️ [PLAYLIST-INFO] New processor failed:', error);
   }
 
   // Method 3: Try web scraping without browser (lighter weight)
@@ -151,54 +167,7 @@ async function getPlaylistInfoFromAPI(playlistId: string): Promise<PlaylistInfo 
   }
 }
 
-/**
- * Get playlist info using yt-dlp command-line tool
- */
-async function getPlaylistInfoFromYtDlp(playlistId: string): Promise<PlaylistInfo | null> {
-  try {
-    // Format URL
-    const url = `https://www.youtube.com/playlist?list=${playlistId}`;
-    
-    // Get playlist info using yt-dlp
-    const { stdout } = await execPromise(
-      `yt-dlp --flat-playlist --dump-single-json "${url}"`,
-      { timeout: 8000 }
-    );
-    
-    // Check if the output looks like HTML instead of JSON
-    if (!stdout || !stdout.trim()) {
-      console.log('yt-dlp returned empty output');
-      return null;
-    }
-    
-    if (stdout.trim().startsWith('<html') || stdout.trim().startsWith('<!DOCTYPE')) {
-      console.log('yt-dlp returned HTML instead of JSON - likely an error page');
-      return null;
-    }
-    
-    let data;
-    try {
-      data = JSON.parse(stdout);
-    } catch (parseError) {
-      console.log(`Failed to parse yt-dlp output as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown error'}`);
-      console.log(`Raw output (first 200 chars): ${stdout.substring(0, 200)}`);
-      return null;
-    }
-    
-    if (!data || !data.title) {
-      return null;
-    }
-    
-    return {
-      title: data.title,
-      videoCount: data.entries?.length || data.playlist_count || 0,
-      isEstimate: false
-    };
-  } catch (error) {
-    console.error('Error in yt-dlp method:', error);
-    return null;
-  }
-}
+
 
 /**
  * Get playlist info using lightweight web scraping
