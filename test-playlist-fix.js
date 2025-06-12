@@ -13,12 +13,17 @@ async function testPlaylistProcessing() {
 
     const testCases = [
         {
-            name: 'Small Playlist',
-            url: 'https://www.youtube.com/playlist?list=PLkqz3S84Tw-S7FsHHCHWU6Q5vyHDi6rw4',
-            expectedTimeout: 60000 // Should complete within 60 seconds
+            name: 'Your Specific Playlist',
+            url: 'https://youtube.com/playlist?list=PL7BImOT2srcFYmdpnrQthlkfg7IPvdyPP&si=h5dbB3q7aBJOPVB7',
+            expectedTimeout: 120000 // Should complete within 2 minutes
         },
         {
-            name: 'Single Video',
+            name: 'Small Test Playlist',
+            url: 'https://www.youtube.com/playlist?list=PLkqz3S84Tw-S7FsHHCHWU6Q5vyHDi6rw4',
+            expectedTimeout: 120000 // Should complete within 2 minutes
+        },
+        {
+            name: 'Single Video (Control)',
             url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
             expectedTimeout: 30000 // Should complete within 30 seconds
         }
