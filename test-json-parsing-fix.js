@@ -7,7 +7,7 @@
 
 const axios = require('axios');
 
-const BASE_URL = 'https://fetchsub.com';
+const BASE_URL = 'http://localhost:3001';
 
 async function testJSONParsingFix() {
     console.log('🧪 Testing JSON parsing error fix...\n');
