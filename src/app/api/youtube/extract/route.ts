@@ -322,6 +322,22 @@ async function extractSubtitles(url: string, format: string, language: string): 
     } else {
       // Fetch the actual transcript using the youtube-transcript-api
       transcript = await fetchTranscript(actualVideoId, language);
+      logProductionDebug('[DEBUG] extractSubtitles: transcript fetched', { videoId: actualVideoId, transcriptLength: transcript?.length });
+      if (!transcript || transcript.length === 0) {
+        logProductionDebug('[DEBUG] extractSubtitles: No transcript found', { videoId: actualVideoId });
+        return {
+          id: `no-subtitles-${actualVideoId}-${format}-${language}`,
+          videoTitle: videoInfo.title,
+          language: getLanguageName(language),
+          format,
+          fileSize: '0KB',
+          content: 'No subtitles found for this video.',
+          url,
+          downloadUrl: '',
+          error: 'No subtitles found',
+          notice: 'No subtitles available for this video.'
+        };
+      }
       
       // Store in cache for future requests
       transcriptCache[cacheKey] = {
