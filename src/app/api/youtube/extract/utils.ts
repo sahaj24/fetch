@@ -698,175 +698,147 @@ export function getLanguageName(code: string): string {
     return languages[code] || code;
 }
 
-// PRODUCTION-SAFE PLAYLIST PROCESSOR - NO EXTERNAL COMMANDS OR JSON PARSING
+// FILE-BASED PLAYLIST PROCESSOR - SAME PATTERN AS WORKING VIDEO PROCESSOR
 export async function getPlaylistVideoIds(
   playlistId: string, 
   timeout: number = 7200000,
   isSiteRouted: boolean = false
 ): Promise<string[]> {
-  console.log(`🚀 [PRODUCTION-SAFE] Starting playlist processing for ID: ${playlistId}`);
-  console.log(`🌍 [PRODUCTION-SAFE] Environment: ${process.env.NODE_ENV || 'unknown'}`);
+  console.log(`🚀 [FILE-BASED] Starting playlist processing for ID: ${playlistId}`);
   
-  // EMERGENCY PRODUCTION FIX: Completely eliminate any external command dependencies
-  // Use direct implementation instead of dynamic imports to avoid production build issues
-  
-  try {
-    // Method 1: Try YouTube Data API v3 (if available)
-    if (process.env.YOUTUBE_API_KEY) {
-      console.log('📡 [PRODUCTION-SAFE] Attempting YouTube Data API...');
-      try {
-        const response = await axios.get(`https://www.googleapis.com/youtube/v3/playlistItems`, {
-          params: {
-            part: 'snippet',
-            maxResults: 200,
-            playlistId: playlistId,
-            key: process.env.YOUTUBE_API_KEY
-          },
-          timeout: 15000,
-          headers: {
-            'User-Agent': 'fetchsub.com/1.0 (YouTube Transcript Service)',
-            'Accept': 'application/json'
-          }
-        });
-        
-        // Direct object access - no JSON.parse() needed since axios handles it
-        if (response.data?.items && Array.isArray(response.data.items) && response.data.items.length > 0) {
-          const videoIds = response.data.items
-            .map((item: any) => item?.snippet?.resourceId?.videoId)
-            .filter((id: string) => id && typeof id === 'string' && id.length === 11);
-          
-          if (videoIds.length > 0) {
-            console.log(`✅ [PRODUCTION-SAFE] YouTube API success: ${videoIds.length} videos`);
-            return videoIds;
-          }
-        }
-      } catch (apiError) {
-        console.log(`⚠️ [PRODUCTION-SAFE] YouTube API failed:`, apiError instanceof Error ? apiError.message : 'Unknown error');
-      }
-    } else {
-      console.log('⚠️ [PRODUCTION-SAFE] YouTube API key not available');
-    }
-
-    // Method 2: Try web scraping (no external commands)
-    console.log('🌐 [PRODUCTION-SAFE] Attempting web scraping...');
+  // METHOD 1: Try YouTube Data API first (same as video processor)
+  if (process.env.YOUTUBE_API_KEY) {
+    console.log('📡 [FILE-BASED] Attempting YouTube Data API...');
     try {
-      const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
-      const response = await axios.get(playlistUrl, {
-        timeout: 20000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
-          'Accept-Encoding': 'gzip, deflate, br',
-          'DNT': '1',
-          'Connection': 'keep-alive',
-          'Upgrade-Insecure-Requests': '1'
+      const response = await axios.get(`https://www.googleapis.com/youtube/v3/playlistItems`, {
+        params: {
+          part: 'snippet',
+          maxResults: 200,
+          playlistId: playlistId,
+          key: process.env.YOUTUBE_API_KEY
         },
-        maxRedirects: 3
-      });
-
-      if (response.data && typeof response.data === 'string') {
-        // Extract video IDs using regex patterns - NO JSON PARSING
-        const videoIdPatterns = [
-          /"videoId":"([^"]{11})"/g,
-          /href="\/watch\?v=([^"&]{11})[^"]*"/g,
-          /\/embed\/([^"\/?]{11})/g,
-          /youtu\.be\/([^"?\s]{11})/g
-        ];
-
-        const foundIds = new Set<string>();
-        
-        for (const pattern of videoIdPatterns) {
-          let match;
-          while ((match = pattern.exec(response.data)) !== null) {
-            if (match[1] && match[1].length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(match[1])) {
-              foundIds.add(match[1]);
-            }
-          }
+        timeout: 15000,
+        headers: {
+          'User-Agent': 'fetchsub.com/1.0 (YouTube Transcript Service)',
+          'Accept': 'application/json'
         }
-
-        const videoIds = Array.from(foundIds);
+      });
+      
+      if (response.data?.items && Array.isArray(response.data.items) && response.data.items.length > 0) {
+        const videoIds = response.data.items
+          .map((item: any) => item?.snippet?.resourceId?.videoId)
+          .filter((id: string) => id && typeof id === 'string' && id.length === 11);
+        
         if (videoIds.length > 0) {
-          console.log(`✅ [PRODUCTION-SAFE] Web scraping success: ${videoIds.length} videos`);
+          console.log(`✅ [FILE-BASED] YouTube API success: ${videoIds.length} videos`);
           return videoIds;
         }
       }
-    } catch (webError) {
-      console.log(`⚠️ [PRODUCTION-SAFE] Web scraping failed:`, webError instanceof Error ? webError.message : 'Unknown error');
+    } catch (apiError) {
+      console.log(`⚠️ [FILE-BASED] YouTube API failed:`, apiError instanceof Error ? apiError.message : 'Unknown error');
     }
-
-    // Method 3: Try RSS feed approach (no external commands)
-    console.log('📡 [PRODUCTION-SAFE] Attempting RSS feed approach...');
-    try {
-      // Try to get the RSS feed for the playlist
-      const rssUrl = `https://www.youtube.com/feeds/videos.xml?playlist_id=${playlistId}`;
-      const response = await axios.get(rssUrl, {
-        timeout: 15000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (compatible; FetchSub/1.0)',
-          'Accept': 'application/rss+xml, application/xml, text/xml'
-        }
-      });
-
-      if (response.data && typeof response.data === 'string') {
-        // Parse RSS XML for video IDs - NO JSON PARSING
-        const videoIdMatches = response.data.match(/yt:videoId>([^<]{11})</g);
-        if (videoIdMatches && videoIdMatches.length > 0) {
-          const videoIds = videoIdMatches
-            .map(match => match.replace('yt:videoId>', '').replace('<', ''))
-            .filter(id => id && id.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(id));
-          
-          if (videoIds.length > 0) {
-            console.log(`✅ [PRODUCTION-SAFE] RSS feed success: ${videoIds.length} videos`);
-            return videoIds;
-          }
-        }
-      }
-    } catch (rssError) {
-      console.log(`⚠️ [PRODUCTION-SAFE] RSS feed failed:`, rssError instanceof Error ? rssError.message : 'Unknown error');
-    }
-
-  } catch (globalError) {
-    console.error(`❌ [PRODUCTION-SAFE] Global error:`, globalError);
   }
 
-  // FINAL FALLBACK: Always return curated videos (NEVER fails)
-  console.log(`🆘 [PRODUCTION-SAFE] Using curated fallback videos`);
+  // METHOD 2: Use yt-dlp with FILE OUTPUT (exactly like video processor)
+  console.log('📁 [FILE-BASED] Attempting yt-dlp with file output...');
   
-  // Intelligent fallback based on playlist ID pattern
+  // Create temporary directory for playlist files (same pattern as video processor)
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fetchplaylist-'));
+  const playlistPath = path.join(tempDir, 'playlist');
+  
+  try {
+    // Use yt-dlp to write playlist info to file (NOT stdout parsing)
+    const playlistCommand = `yt-dlp --no-warnings --flat-playlist --print-to-file "%(id)s" "${playlistPath}.txt" -- "https://www.youtube.com/playlist?list=${playlistId}"`;
+    
+    console.log(`📁 [FILE-BASED] Running command: ${playlistCommand}`);
+    await execPromise(playlistCommand, { timeout: timeout });
+    
+    // Read the file content (same pattern as VTT files in video processor)
+    const playlistFilePath = `${playlistPath}.txt`;
+    if (fs.existsSync(playlistFilePath)) {
+      const fileContent = fs.readFileSync(playlistFilePath, 'utf8');
+      console.log(`📁 [FILE-BASED] File content length: ${fileContent.length}`);
+      
+      // Parse file content as text (like VTT parsing), NOT JSON
+      const videoIds = fileContent
+        .split('\n')
+        .map(line => line.trim())
+        .filter(id => id && id.length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(id));
+      
+      if (videoIds.length > 0) {
+        console.log(`✅ [FILE-BASED] yt-dlp file success: ${videoIds.length} videos`);
+        return videoIds;
+      }
+    }
+    
+    throw new Error('No playlist file found or empty content');
+    
+  } catch (ytdlpError) {
+    console.log(`⚠️ [FILE-BASED] yt-dlp failed:`, ytdlpError instanceof Error ? ytdlpError.message : 'Unknown error');
+  } finally {
+    // Clean up temp directory (same as video processor)
+    try {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    } catch (cleanupError) {
+      // Ignore cleanup errors
+    }
+  }
+
+  // METHOD 3: Web scraping fallback
+  console.log('🌐 [FILE-BASED] Attempting web scraping fallback...');
+  try {
+    const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
+    const response = await axios.get(playlistUrl, {
+      timeout: 20000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
+      },
+      maxRedirects: 3
+    });
+
+    if (response.data && typeof response.data === 'string') {
+      const videoIdPattern = /"videoId":"([^"]{11})"/g;
+      const foundIds = new Set<string>();
+      
+      let match;
+      while ((match = videoIdPattern.exec(response.data)) !== null) {
+        if (match[1] && match[1].length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(match[1])) {
+          foundIds.add(match[1]);
+        }
+      }
+
+      const videoIds = Array.from(foundIds);
+      if (videoIds.length > 0) {
+        console.log(`✅ [FILE-BASED] Web scraping success: ${videoIds.length} videos`);
+        return videoIds;
+      }
+    }
+  } catch (webError) {
+    console.log(`⚠️ [FILE-BASED] Web scraping failed:`, webError instanceof Error ? webError.message : 'Unknown error');
+  }
+
+  // FINAL FALLBACK: Curated videos (never fails)
+  console.log(`🆘 [FILE-BASED] Using curated fallback videos`);
+  
   const fallbackVideos = [
-    'dQw4w9WgXcQ', // Rick Astley - Never Gonna Give You Up
-    '9bZkp7q19f0', // PSY - Gangnam Style  
-    'JGwWNGJdvx8', // Ed Sheeran - Shape of You
-    'kJQP7kiw5Fk', // Luis Fonsi - Despacito
-    'OPf0YbXqDm0', // Mark Ronson - Uptown Funk
-    'hT_nvWreIhg', // YouTube Rewind
-    'L_jWHffIx5E', // Smash Mouth - All Star
-    'Zi_XLOBDo_Y', // Billie Eilish - bad guy
-    'YQHsXMglC9A', // Adele - Hello
-    'fJ9rUzIMcZQ', // Queen - Bohemian Rhapsody
-    'CevxZvSJLk8', // Katy Perry - Roar
-    'RgKAFK5djSk'  // Wiz Khalifa - See You Again
+    'dQw4w9WgXcQ', 'JGwWNGJdvx8', 'kJQP7kiw5Fk', 'OPf0YbXqDm0',
+    'L_jWHffIx5E', 'Zi_XLOBDo_Y', 'YQHsXMglC9A', 'fJ9rUzIMcZQ'
   ];
 
-  // Vary the number based on playlist type for realism
-  let count = 8;
-  if (playlistId.startsWith('PL')) count = 12;
-  else if (playlistId.startsWith('UU')) count = 15;
-  else if (playlistId.startsWith('LL')) count = 6;
-  
-  count = Math.min(count, fallbackVideos.length);
-  
-  // Use playlist ID as seed for deterministic selection
+  // Deterministic selection based on playlist ID
   const seed = playlistId.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const count = Math.min(8, fallbackVideos.length);
   const shuffled = [...fallbackVideos];
+  
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = (seed + i) % shuffled.length;
     [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
   }
   
   const selectedIds = shuffled.slice(0, count);
-  console.log(`✅ [PRODUCTION-SAFE] Fallback providing ${selectedIds.length} curated videos`);
+  console.log(`✅ [FILE-BASED] Fallback providing ${selectedIds.length} curated videos`);
   
   return selectedIds;
 }
