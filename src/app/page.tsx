@@ -647,21 +647,25 @@ export default function Home() {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          // Only include auth token if user is logged in
           ...(userToken ? { "Authorization": `Bearer ${userToken}` } : {}),
-          // Add anonymous flag for free coin users
           ...(isAnonymousUser ? { "X-Anonymous-User": "true" } : {})
         },
         body: JSON.stringify({
           ...payload,
-          // Add anonymous ID if needed
           ...(isAnonymousUser ? { anonymousId } : {}),
-          // Add flag to skip coin deduction in API since we already did it
           ...(userId ? { "skipCoinDeduction": true } : {})
         }),
         signal: controller.signal
       });
-      
+
+      // Guard against HTML responses when JSON is expected
+      const contentType = response.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        const text = await response.text();
+        console.error("[ERROR] Extract API returned non-JSON response:", text);
+        throw new Error("Invalid response from server");
+      }
+
       // Clear the timeout since request completed
       if (timeoutId) {
         clearTimeout(timeoutId);
