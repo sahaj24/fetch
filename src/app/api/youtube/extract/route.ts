@@ -1536,6 +1536,16 @@ export async function POST(req: NextRequest) {
           // For large responses, return a streamable response
           return streamResponse(subtitles);
         } else {
+          // Debug log: print a summary of the subtitles array before returning
+          logProductionDebug('Returning subtitles array', {
+            count: subtitles.length,
+            summary: subtitles.map(s => ({
+              id: s.id,
+              videoTitle: s.videoTitle,
+              error: s.error,
+              content: (s.content || '').slice(0, 100)
+            }))
+          });
           // For smaller responses, return the full JSON
           return NextResponse.json({ 
             subtitles, 
