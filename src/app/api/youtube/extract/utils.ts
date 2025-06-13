@@ -715,20 +715,20 @@ export async function getPlaylistVideoIds(
   const isCloudEnvironment = process.env.VERCEL || process.env.NETLIFY || process.env.HEROKU || process.env.RAILWAY;
   
   // EMERGENCY FIX: Force immediate fallback in cloud production to prevent hanging
-  if (isProduction && isCloudEnvironment) {
-    console.log(`🚨 [EMERGENCY FIX] Cloud production detected - using immediate fallback to prevent timeout`);
-    console.log(`🔧 [EMERGENCY FIX] Skipping all network methods due to infrastructure timeout issues`);
-    
-    try {
-      const fallbackIds = await getFallbackPlaylistVideoIds(playlistId);
-      console.log(`✅ [EMERGENCY FIX] Immediate fallback success: Using ${fallbackIds.length} sample videos`);
-      console.log(`📝 [EMERGENCY FIX] This prevents 504 Gateway Timeout errors in production`);
-      return fallbackIds;
-    } catch (fallbackError) {
-      console.error('❌ [EMERGENCY FIX] Even fallback failed:', fallbackError);
-      return ['dQw4w9WgXcQ']; // Single emergency video
-    }
-  }
+  // --- DISABLED: Allow real playlist extraction in production/cloud environments ---
+  // if (isProduction && isCloudEnvironment) {
+  //   console.log(`🚨 [EMERGENCY FIX] Cloud production detected - using immediate fallback to prevent timeout`);
+  //   console.log(`🔧 [EMERGENCY FIX] Skipping all network methods due to infrastructure timeout issues`);
+  //   try {
+  //     const fallbackIds = await getFallbackPlaylistVideoIds(playlistId);
+  //     console.log(`✅ [EMERGENCY FIX] Immediate fallback success: Using ${fallbackIds.length} sample videos`);
+  //     console.log(`📝 [EMERGENCY FIX] This prevents 504 Gateway Timeout errors in production`);
+  //     return fallbackIds;
+  //   } catch (fallbackError) {
+  //     console.error('❌ [EMERGENCY FIX] Even fallback failed:', fallbackError);
+  //     return ['dQw4w9WgXcQ']; // Single emergency video
+  //   }
+  // }
   
   // DO NOT CHANGE: Use full timeout for all methods - playlist processing needs time
   let methodTimeout = timeout; // Keep original timeout, don't reduce
