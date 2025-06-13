@@ -807,26 +807,24 @@ async function processYouTubeUrl(
   if (videoId.startsWith('playlist:')) {
     // This is a playlist URL - get all video IDs in the playlist
     const playlistId = videoId.replace('playlist:', '');
+    logProductionDebug('[DEBUG] Playlist processing started', { playlistId });
     try {
-      
       // Validate the playlist ID format
       if (!playlistId || playlistId.length < 5) {
         throw new Error('Invalid playlist ID format');
       }
-        // Add a specific try-catch for the getPlaylistVideoIds function call
       let playlistVideoIds;
       try {
         playlistVideoIds = await getPlaylistVideoIds(playlistId, config.timeout, isSiteRouted);
+        logProductionDebug('[DEBUG] Playlist video IDs fetched', { playlistId, playlistVideoIds });
       } catch (playlistError) {
         console.error('Error in getPlaylistVideoIds:', playlistError);
-        throw new Error(`Could not retrieve videos from playlist: ${
-          playlistError instanceof Error ? playlistError.message : 'Unknown error'
-        }`);
+        throw new Error(`Could not retrieve videos from playlist: ${playlistError instanceof Error ? playlistError.message : 'Unknown error'}`);
       }
-        if (playlistVideoIds.length === 0) {
+      if (playlistVideoIds.length === 0) {
+        logProductionDebug('[DEBUG] No video IDs found for playlist', { playlistId });
         throw new Error('No videos found in this playlist. The playlist might be empty, private, or does not exist.');
       }
-      
       // Convert video IDs to full URLs
       videoUrls = playlistVideoIds.map(id => `https://www.youtube.com/watch?v=${id}`);
       
@@ -953,8 +951,8 @@ async function processYouTubeUrl(
 
   // Create a processing function that handles multiple formats for a single video in parallel
   const processVideo = async (videoUrl: string): Promise<ExtendedSubtitleResult[]> => {
-    // Extract the ID once and reuse it
     const videoId = extractVideoId(videoUrl);
+    logProductionDebug('[DEBUG] Processing video for subtitles', { videoUrl, videoId });
     if (!videoId) {
       // Return an error result if the URL is invalid
       return [{
@@ -969,16 +967,13 @@ async function processYouTubeUrl(
         error: `Invalid YouTube URL: ${videoUrl}`
       }];
     }
-    
-    // Process all formats in parallel using Promise.all
     try {
       const formatPromises = formats.map(async (format) => {
         try {
-          // Each format will reuse any cached transcript data
+          logProductionDebug('[DEBUG] Extracting subtitles', { videoId, format });
           return await extractSubtitles(videoUrl, format, language);
         } catch (error: any) {
-          console.error(`Error processing ${videoUrl} with format ${format}:`, error);
-          // Return an error entry with relevant information
+          console.error(`[DEBUG] Error processing ${videoUrl} with format ${format}:`, error);
           return {
             id: `error-${videoId}-${format}-${language}`,
             videoTitle: `Error processing video`,
@@ -992,11 +987,9 @@ async function processYouTubeUrl(
           } as ExtendedSubtitleResult;
         }
       });
-      
-      // Wait for all format processing to complete in parallel
       return await Promise.all(formatPromises);
     } catch (error: any) {
-      console.error(`Error in parallel format processing for ${videoUrl}:`, error);
+      console.error(`[DEBUG] Error in parallel format processing for ${videoUrl}:`, error);
       return [{
         id: `error-${videoId}-general-${language}`,
         videoTitle: `Error processing video`,
