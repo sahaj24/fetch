@@ -661,11 +661,10 @@ export default function Home() {
       // Guard against HTML responses when JSON is expected
       const contentType = response.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
-        const text = await response.text();
-        console.error("[ERROR] Extract API returned non-JSON response:", text);
-        throw new Error("Invalid response from server");
+        // Non-JSON response (e.g., HTML error), abort parsing and let catch handle UI
+        throw new Error(`Server Error: ${response.status}`);
       }
-
+  
       // Clear the timeout since request completed
       if (timeoutId) {
         clearTimeout(timeoutId);

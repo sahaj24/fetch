@@ -875,10 +875,7 @@ export async function getPlaylistVideoIds(
   try {
     const fallbackIds = await getFallbackPlaylistVideoIds(playlistId);
     console.log(`✅ [PRODUCTION] Fallback success: Using ${fallbackIds.length} sample videos`);
-    
-    // Log that we're using fallback for production monitoring
     console.log(`🔍 [PRODUCTION] FALLBACK USED - Playlist ${playlistId} failed all extraction methods. Errors: ${JSON.stringify(errors)}`);
-    
     return fallbackIds;
   } catch (fallbackError) {
     console.error('❌ [PRODUCTION] CRITICAL ERROR - All methods failed including fallback:', fallbackError);
