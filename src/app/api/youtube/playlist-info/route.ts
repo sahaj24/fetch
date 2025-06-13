@@ -29,10 +29,10 @@ const CACHE_TTL_ESTIMATE = 30 * 60 * 1000; // 30 minutes
  * Endpoint to get YouTube playlist information quickly and efficiently
  */
 export async function GET(request: Request) {
-  const url = new URL(request.url);
-  const playlistId = url.searchParams.get('id');
-  
   try {
+    const url = new URL(request.url);
+    const playlistId = url.searchParams.get('id');
+    
     if (!playlistId) {
       return NextResponse.json(
         { error: 'Playlist ID is required' },
@@ -86,108 +86,13 @@ async function getPlaylistInfoFast(playlistId: string): Promise<PlaylistInfo> {
     }
   }
 
-  // Method 2: Use direct playlist processing (no external commands or JSON parsing)
+  // Method 2: Try yt-dlp (fast and reliable)
   try {
-    console.log('🚀 [PLAYLIST-INFO] Using direct playlist processing for playlist info');
-    
-    // Use the same logic as the main processor to ensure consistency
-    let videoIds: string[] = [];
-    
-    // Try YouTube Data API v3 first (if available)
-    if (process.env.YOUTUBE_API_KEY) {
-      console.log('📡 [PLAYLIST-INFO] Attempting YouTube Data API...');
-      try {
-        const response = await axios.get(`https://www.googleapis.com/youtube/v3/playlistItems`, {
-          params: {
-            part: 'snippet',
-            maxResults: 200,
-            playlistId: playlistId,
-            key: process.env.YOUTUBE_API_KEY
-          },
-          timeout: 15000,
-          headers: {
-            'User-Agent': 'fetchsub.com/1.0 (YouTube Transcript Service)',
-            'Accept': 'application/json'
-          }
-        });
-        
-        // Direct object access - no JSON.parse() needed since axios handles it
-        if (response.data?.items && Array.isArray(response.data.items) && response.data.items.length > 0) {
-          videoIds = response.data.items
-            .map((item: any) => item?.snippet?.resourceId?.videoId)
-            .filter((id: string) => id && typeof id === 'string' && id.length === 11);
-          
-          if (videoIds.length > 0) {
-            console.log(`✅ [PLAYLIST-INFO] YouTube API success: ${videoIds.length} videos`);
-          }
-        }
-      } catch (apiError) {
-        console.log(`⚠️ [PLAYLIST-INFO] YouTube API failed:`, apiError instanceof Error ? apiError.message : 'Unknown error');
-      }
-    }
-    
-    // If API didn't work, try web scraping
-    if (videoIds.length === 0) {
-      console.log('🌐 [PLAYLIST-INFO] Attempting web scraping...');
-      try {
-        const playlistUrl = `https://www.youtube.com/playlist?list=${playlistId}`;
-        const response = await axios.get(playlistUrl, {
-          timeout: 20000,
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.9'
-          },
-          maxRedirects: 3
-        });
-
-        if (response.data && typeof response.data === 'string') {
-          // Extract video IDs using regex patterns - NO JSON PARSING
-          const videoIdPatterns = [
-            /"videoId":"([^"]{11})"/g,
-            /href="\/watch\?v=([^"&]{11})[^"]*"/g
-          ];
-
-          const foundIds = new Set<string>();
-          
-          for (const pattern of videoIdPatterns) {
-            let match;
-            while ((match = pattern.exec(response.data)) !== null) {
-              if (match[1] && match[1].length === 11 && /^[a-zA-Z0-9_-]{11}$/.test(match[1])) {
-                foundIds.add(match[1]);
-              }
-            }
-          }
-
-          videoIds = Array.from(foundIds);
-          if (videoIds.length > 0) {
-            console.log(`✅ [PLAYLIST-INFO] Web scraping success: ${videoIds.length} videos`);
-          }
-        }
-      } catch (webError) {
-        console.log(`⚠️ [PLAYLIST-INFO] Web scraping failed:`, webError instanceof Error ? webError.message : 'Unknown error');
-      }
-    }
-    
-    // Use fallback if still no videos found
-    if (videoIds.length === 0) {
-      console.log('🆘 [PLAYLIST-INFO] Using fallback count');
-      videoIds = ['fallback']; // Just to get a count, we don't need actual IDs for playlist info
-    }
-    
-    if (videoIds.length > 0) {
-      // Create playlist info from the successful video extraction
-      const result: PlaylistInfo = {
-        title: "YouTube Playlist", // Default title - will be enhanced later if needed
-        videoCount: videoIds.length === 1 && videoIds[0] === 'fallback' ? 8 : videoIds.length,
-        isEstimate: videoIds[0] === 'fallback'
-      };
-      
-      console.log(`✅ [PLAYLIST-INFO] Direct processor success: ${result.videoCount} videos`);
+    const result = await getPlaylistInfoFromYtDlp(playlistId);
+    if (result && result.videoCount > 0) {
       return result;
     }
   } catch (error) {
-    console.error('⚠️ [PLAYLIST-INFO] Direct processor failed:', error);
   }
 
   // Method 3: Try web scraping without browser (lighter weight)
@@ -246,7 +151,36 @@ async function getPlaylistInfoFromAPI(playlistId: string): Promise<PlaylistInfo 
   }
 }
 
-
+/**
+ * Get playlist info using yt-dlp command-line tool
+ */
+async function getPlaylistInfoFromYtDlp(playlistId: string): Promise<PlaylistInfo | null> {
+  try {
+    // Format URL
+    const url = `https://www.youtube.com/playlist?list=${playlistId}`;
+    
+    // Get playlist info using yt-dlp
+    const { stdout } = await execPromise(
+      `yt-dlp --flat-playlist --dump-single-json "${url}"`,
+      { timeout: 8000 }
+    );
+    
+    const data = JSON.parse(stdout);
+    
+    if (!data || !data.title) {
+      return null;
+    }
+    
+    return {
+      title: data.title,
+      videoCount: data.entries?.length || data.playlist_count || 0,
+      isEstimate: false
+    };
+  } catch (error) {
+    console.error('Error in yt-dlp method:', error);
+    return null;
+  }
+}
 
 /**
  * Get playlist info using lightweight web scraping

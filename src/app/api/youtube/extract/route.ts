@@ -1586,10 +1586,8 @@ export async function GET(request: NextRequest) {
 
     } catch (transcriptError: any) {
       console.error(`Transcript extraction error: ${transcriptError.message}`);
-      
       // Generate placeholder subtitles as a last resort
       const { content } = await generateSubtitles(videoTitle, format);
-      
       // Return response with error and generated content
       return NextResponse.json({
         id: videoId,
@@ -1602,7 +1600,8 @@ export async function GET(request: NextRequest) {
         downloadUrl: `${request.nextUrl.origin}/api/youtube/download?url=${encodeURIComponent(url)}&format=${format}&lang=${language}`,
         isGenerated: true,
         error: transcriptError.message
-      });    }
+      });
+    }
   } catch (error: any) {
     logProductionDebug(`Error in GET route handler: ${error.message}`);
     return handleProductionError(error, 'GET /api/youtube/extract');
