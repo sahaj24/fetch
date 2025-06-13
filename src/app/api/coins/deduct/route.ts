@@ -28,9 +28,18 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { 
       amount = 10, // Default to 10 coins if not specified
-      description = 'Subtitle extraction service'
+      description = 'Subtitle extraction service',
+      skipCoinDeduction = false // Flag to bypass coin deduction
     } = body;
     
+    // Bypass deduction for testing or anonymous scenarios
+    if (skipCoinDeduction || request.headers.get('x-anonymous-user') === 'true') {
+      return NextResponse.json({ 
+        success: true,
+        remainingBalance: 9999, // High balance for testing
+        deducted: 0
+      });
+    }
     
     // Step 1: Check/create user_coins record
     // First get user's current balance
