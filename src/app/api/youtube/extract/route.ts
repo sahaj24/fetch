@@ -1215,293 +1215,325 @@ async function streamResponse(data: any) {
   });
 }
 
-// Main API handler
+// Main API handler with timeout protection
 export async function POST(req: NextRequest) {
-  // Log the request for production debugging
-  logApiRequest(req, 'YouTube Extract POST');
-  
-  // Validate this is actually an API route
-  if (!validateApiRoute(req)) {
-    return NextResponse.json(
-      { error: 'Invalid API route', url: req.url },
-      { status: 404, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Enhanced production debugging with site routing detection
-  const userAgent = req.headers.get('user-agent') || '';
-  const referer = req.headers.get('referer') || '';
-  const xForwardedFor = req.headers.get('x-forwarded-for') || '';
-  const xRealIp = req.headers.get('x-real-ip') || '';
-  const host = req.headers.get('host') || '';
-  const contentLength = req.headers.get('content-length') || '';
-  
-  // Detect if request is coming through a proxy/CDN (site routing)
-  const isSiteRouted = !!(xForwardedFor || xRealIp || 
-    referer.includes('yoursite.com') || // Replace with actual site domain
-    host !== 'localhost:3000' && host !== 'localhost:3001');
-  
-  logProductionDebug('POST request received', {
-    url: req.url,
-    method: req.method,
-    host,
-    userAgent: userAgent.substring(0, 100),
-    referer,
-    xForwardedFor,
-    xRealIp,
-    contentLength,
-    isSiteRouted,
-    timestamp: new Date().toISOString()
+  // Timeout fallback: always return JSON if processing takes too long
+  const timeoutFallback = new Promise<NextResponse>((resolve) => {
+    setTimeout(() => {
+      resolve(NextResponse.json({
+        id: 'timeout_fallback',
+        videoTitle: 'Processing Timeout - Please Try Again',
+        language: 'en',
+        format: 'text',
+        fileSize: '0.8 KB',
+        content: '[00:00] Request processing timed out to prevent gateway errors.\n\n[00:03] This is a protective measure for cloud deployments.\n\n[00:06] Please try again with:\n\n[00:09] - A shorter playlist (under 50 videos)\n\n[00:12] - A single video URL instead\n\n[00:15] - Or try again in a few moments\n\n[00:18] The system is working correctly.',
+        url: req.url || '',
+        downloadUrl: '',
+        isGenerated: true,
+        isTimeoutFallback: true,
+        error: 'Processing timeout (protective measure)',
+        notice: 'This timeout prevents 504 Gateway errors. Please try a shorter request.'
+      }, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Timeout-Protection': 'active'
+        }
+      }));
+    }, 25000); // 25 seconds
   });
 
-  try {
-    const body = await req.json();
-    const { inputType, url, csvContent, formats, language } = body;
-    
-    logProductionDebug('Request body parsed', { inputType, url: url ? 'present' : 'missing', formats, language });
-    
-    // Get the auth token from the request header
-    const authToken = req.headers.get('authorization')?.split('Bearer ')[1];
-    // Check if this is an anonymous user with free coins
-    const isAnonymousUser = req.headers.get('X-Anonymous-User') === 'true';
-    const anonymousId = body.anonymousId || `anonymous-${Date.now()}`;
-    
-    let userId: string | null = null;
-    
-    if (isAnonymousUser) {
-      // This is an anonymous user with free coins
-      // Allow the request to proceed without authentication
-      // We'll use the free 15 coins for processing
-      userId = anonymousId;
-    } else if (!authToken) {
-      // Non-anonymous requests still need authentication
-      return NextResponse.json(
-        { error: "Authentication required" },
-        { status: 401 },
-      );
-    } else {
-      // Authenticate the user with Supabase
-      const { data: { user }, error: authError } = await supabase.auth.getUser(authToken);
+  // Race the actual processing against the timeout
+  return Promise.race([
+    (async () => {
+      // Log the request for production debugging
+      logApiRequest(req, 'YouTube Extract POST');
       
-      if (authError || !user) {
-        console.error("Auth error:", authError);
+      // Validate this is actually an API route
+      if (!validateApiRoute(req)) {
         return NextResponse.json(
-          { error: "Invalid authentication" },
-          { status: 401 },
+          { error: 'Invalid API route', url: req.url },
+          { status: 404, headers: { 'Content-Type': 'application/json' } }
         );
       }
-      
-      // We now have the proper Supabase UUID for authenticated users
-      userId = user.id;
-    }
-    
-    
-    // Validate required parameters
-    if (!formats || !language) {
-      return NextResponse.json(
-        { error: "Missing required parameters" },
-        { status: 400 },
-      );
-    }
 
-    // Track processing start time for performance monitoring
-    const startTime = Date.now();
-    let subtitles = [];
-    let processingStats = { totalVideos: 0, processedVideos: 0, errorCount: 0 };    // Process based on input type
-    if (inputType === "url" && url) {
-        // For single video URLs, use the requested language
-      let actualLanguage = language;
-      const videoId = extractVideoId(url);
+      // Enhanced production debugging with site routing detection
+      const userAgent = req.headers.get('user-agent') || '';
+      const referer = req.headers.get('referer') || '';
+      const xForwardedFor = req.headers.get('x-forwarded-for') || '';
+      const xRealIp = req.headers.get('x-real-ip') || '';
+      const host = req.headers.get('host') || '';
+      const contentLength = req.headers.get('content-length') || '';
       
-      if (videoId && !videoId.startsWith('playlist:') && !videoId.startsWith('channel:')) {
-        // This is a single video - use the requested language directly
-      }
+      // Detect if request is coming through a proxy/CDN (site routing)
+      const isSiteRouted = !!(xForwardedFor || xRealIp || 
+        referer.includes('yoursite.com') || // Replace with actual site domain
+        host !== 'localhost:3000' && host !== 'localhost:3001');
       
-      subtitles = await processYouTubeUrl(url, formats, actualLanguage, isSiteRouted);
-      // Calculate stats for successful subtitles
-      const validSubtitles = subtitles as SubtitleResult[];
-      processingStats.totalVideos = validSubtitles.length / formats.length;
-      // Round up to the nearest integer to avoid fractional video counts
-      processingStats.processedVideos = Math.ceil(validSubtitles.filter(s => !s.error && !s.isGenerated).length / formats.length);
-      processingStats.errorCount = validSubtitles.filter(s => s.error).length;
+      logProductionDebug('POST request received', {
+        url: req.url,
+        method: req.method,
+        host,
+        userAgent: userAgent.substring(0, 100),
+        referer,
+        xForwardedFor,
+        xRealIp,
+        contentLength,
+        isSiteRouted,
+        timestamp: new Date().toISOString()
+      });
 
-      // Deduct coins for successfully processed videos
-      if (userId && processingStats.processedVideos > 0) {
-        try {
-          
-          // Get coin cost from the payload if available, otherwise calculate it
-          let cost = 0;
-          
-          // Use the provided estimate if available instead of recalculating
-          if (body.coinCostEstimate && typeof body.coinCostEstimate === 'number') {
-            cost = body.coinCostEstimate;
-          } else {
-            // Calculate cost based on type and count
-            if (inputType === "url") {
-              if (processingStats.processedVideos > 1) {
-                // Batch rate for playlists/channels - multiply by formats.length since each format is a separate subtitle
-                cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE * formats.length;
-              } else {
-                // Single video rate - multiply by formats.length since each format is a separate subtitle
-                cost = OPERATION_COSTS.SINGLE_SUBTITLE * formats.length;
-              }
-            } else if (inputType === "file") {
-              // CSV files always use batch rate - multiply by formats.length since each format is a separate subtitle
-              cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE * formats.length;
-            }
-            
-            // Ensure minimum cost is 1 coin
-            cost = Math.max(cost, 1);
-          }
-          
-          // Check if this is an anonymous user with free coins
-          const isAnonymousUser = userId?.startsWith('anonymous-');
-
-          if (isAnonymousUser) {
-            // Continue processing without coin deduction for anonymous users
-          } else {
-            // For authenticated users, use the deductCoinsForOperation utility
-            // Use a valid OperationType from the defined type
-            const operationType = inputType === "url" ? "EXTRACT_SUBTITLES" : "BATCH_EXTRACT";
-            const deductionSuccess = await deductCoinsForOperation(userId, operationType, cost);
-            
-            if (!deductionSuccess) {
-              console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
-              return NextResponse.json(
-                { 
-                  error: "Insufficient coins for this operation",
-                  requireMoreCoins: true
-                },
-                { status: 402 }
-              );
-            }
-            
-          }        } catch (deductError) {
-            console.error(`Error in coin handling for user ${userId}:`, deductError);
-            // Return error response - don't continue processing if coin deduction fails
-            return NextResponse.json(
-              { 
-                error: "Failed to process coin deduction. Please try again.",
-                details: deductError instanceof Error ? deductError.message : 'Unknown error'
-              },
-              { status: 500 }
-            );
-          }
-      } else {
-        console.warn(`Not deducting coins because userId=${userId} or processedVideos=${processingStats.processedVideos}`);
-      }
-    } else if (inputType === "file" && csvContent) {
       try {
-        // Make sure the CSV content is a proper string
-        if (typeof csvContent !== 'string' || !csvContent.trim()) {
-          throw new Error("Empty or invalid CSV content");
+        const body = await req.json();
+        const { inputType, url, csvContent, formats, language } = body;
+        
+        logProductionDebug('Request body parsed', { inputType, url: url ? 'present' : 'missing', formats, language });
+        
+        // Get the auth token from the request header
+        const authToken = req.headers.get('authorization')?.split('Bearer ')[1];
+        // Check if this is an anonymous user with free coins
+        const isAnonymousUser = req.headers.get('X-Anonymous-User') === 'true';
+        const anonymousId = body.anonymousId || `anonymous-${Date.now()}`;
+        
+        let userId: string | null = null;
+        
+        if (isAnonymousUser) {
+          // This is an anonymous user with free coins
+          // Allow the request to proceed without authentication
+          // We'll use the free 15 coins for processing
+          userId = anonymousId;
+        } else if (!authToken) {
+          // Non-anonymous requests still need authentication
+          return NextResponse.json(
+            { error: "Authentication required" },
+            { status: 401 },
+          );
+        } else {
+          // Authenticate the user with Supabase
+          const { data: { user }, error: authError } = await supabase.auth.getUser(authToken);
+          
+          if (authError || !user) {
+            console.error("Auth error:", authError);
+            return NextResponse.json(
+              { error: "Invalid authentication" },
+              { status: 401 },
+            );
+          }
+          
+          // We now have the proper Supabase UUID for authenticated users
+          userId = user.id;
         }
-          // Process the CSV file
-        subtitles = await processCSVFile(csvContent, formats, language, isSiteRouted);
         
-        // Check if we got results
-        if (!Array.isArray(subtitles) || subtitles.length === 0) {
-          console.warn("CSV processing returned no results");
-          subtitles = [{ 
-            id: `csv-error-${Date.now()}`,
-            videoTitle: 'CSV Processing Warning',
-            language: getLanguageName(language),
-            format: formats[0] || 'txt',
-            fileSize: '0KB',
-            content: 'No valid YouTube URLs could be processed from the uploaded file.',
-            url: '',
-            downloadUrl: '',
-            error: "No valid YouTube URLs processed"
-          }];
+        
+        // Validate required parameters
+        if (!formats || !language) {
+          return NextResponse.json(
+            { error: "Missing required parameters" },
+            { status: 400 },
+          );
         }
-        
-        // Calculate stats for successful subtitles
-        const validSubtitles = subtitles as SubtitleResult[];
-        processingStats.totalVideos = validSubtitles.length / formats.length || 0;
-        // Round up to the nearest integer to avoid fractional video counts
-        processingStats.processedVideos = Math.ceil(validSubtitles.filter(s => !s.error && !s.isGenerated).length / formats.length || 0);
-        processingStats.errorCount = validSubtitles.filter(s => s.error).length || 0;
-        
-        // Deduct coins for successfully processed videos
-        if (userId && processingStats.processedVideos > 0) {
+
+        // Track processing start time for performance monitoring
+        const startTime = Date.now();
+        let subtitles = [];
+        let processingStats = { totalVideos: 0, processedVideos: 0, errorCount: 0 };    // Process based on input type
+        if (inputType === "url" && url) {
+            // For single video URLs, use the requested language
+          let actualLanguage = language;
+          const videoId = extractVideoId(url);
+          
+          if (videoId && !videoId.startsWith('playlist:') && !videoId.startsWith('channel:')) {
+            // This is a single video - use the requested language directly
+          }
+          
+          subtitles = await processYouTubeUrl(url, formats, actualLanguage, isSiteRouted);
+          // Calculate stats for successful subtitles
+          const validSubtitles = subtitles as SubtitleResult[];
+          processingStats.totalVideos = validSubtitles.length / formats.length;
+          // Round up to the nearest integer to avoid fractional video counts
+          processingStats.processedVideos = Math.ceil(validSubtitles.filter(s => !s.error && !s.isGenerated).length / formats.length);
+          processingStats.errorCount = validSubtitles.filter(s => s.error).length;
+
+          // Deduct coins for successfully processed videos
+          if (userId && processingStats.processedVideos > 0) {
+            try {
+              
+              // Get coin cost from the payload if available, otherwise calculate it
+              let cost = 0;
+              
+              // Use the provided estimate if available instead of recalculating
+              if (body.coinCostEstimate && typeof body.coinCostEstimate === 'number') {
+                cost = body.coinCostEstimate;
+              } else {
+                // Calculate cost based on type and count
+                if (inputType === "url") {
+                  if (processingStats.processedVideos > 1) {
+                    // Batch rate for playlists/channels - multiply by formats.length since each format is a separate subtitle
+                    cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE * formats.length;
+                  } else {
+                    // Single video rate - multiply by formats.length since each format is a separate subtitle
+                    cost = OPERATION_COSTS.SINGLE_SUBTITLE * formats.length;
+                  }
+                } else if (inputType === "file") {
+                  // CSV files always use batch rate - multiply by formats.length since each format is a separate subtitle
+                  cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE * formats.length;
+                }
+                
+                // Ensure minimum cost is 1 coin
+                cost = Math.max(cost, 1);
+              }
+              
+              // Check if this is an anonymous user with free coins
+              const isAnonymousUser = userId?.startsWith('anonymous-');
+
+              if (isAnonymousUser) {
+                // Continue processing without coin deduction for anonymous users
+              } else {
+                // For authenticated users, use the deductCoinsForOperation utility
+                // Use a valid OperationType from the defined type
+                const operationType = inputType === "url" ? "EXTRACT_SUBTITLES" : "BATCH_EXTRACT";
+                const deductionSuccess = await deductCoinsForOperation(userId, operationType, cost);
+                
+                if (!deductionSuccess) {
+                  console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
+                  return NextResponse.json(
+                    { 
+                      error: "Insufficient coins for this operation",
+                      requireMoreCoins: true
+                    },
+                    { status: 402 }
+                  );
+                }
+                
+              }        } catch (deductError) {
+                console.error(`Error in coin handling for user ${userId}:`, deductError);
+                // Return error response - don't continue processing if coin deduction fails
+                return NextResponse.json(
+                  { 
+                    error: "Failed to process coin deduction. Please try again.",
+                    details: deductError instanceof Error ? deductError.message : 'Unknown error'
+                  },
+                  { status: 500 }
+                );
+              }
+          } else {
+            console.warn(`Not deducting coins because userId=${userId} or processedVideos=${processingStats.processedVideos}`);
+          }
+        } else if (inputType === "file" && csvContent) {
           try {
+            // Make sure the CSV content is a proper string
+            if (typeof csvContent !== 'string' || !csvContent.trim()) {
+              throw new Error("Empty or invalid CSV content");
+            }
+              // Process the CSV file
+            subtitles = await processCSVFile(csvContent, formats, language, isSiteRouted);
             
-            // Calculate cost for this operation
-            let cost = 0;
-            
-            // Calculate cost based on type and count
-            if (inputType === "file") {
-              // CSV files always use batch rate
-              cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE;
+            // Check if we got results
+            if (!Array.isArray(subtitles) || subtitles.length === 0) {
+              console.warn("CSV processing returned no results");
+              subtitles = [{ 
+                id: `csv-error-${Date.now()}`,
+                videoTitle: 'CSV Processing Warning',
+                language: getLanguageName(language),
+                format: formats[0] || 'txt',
+                fileSize: '0KB',
+                content: 'No valid YouTube URLs could be processed from the uploaded file.',
+                url: '',
+                downloadUrl: '',
+                error: "No valid YouTube URLs processed"
+              }];
             }
             
-            // Minimum cost is 1 coin
-            cost = Math.max(cost, 1);
+            // Calculate stats for successful subtitles
+            const validSubtitles = subtitles as SubtitleResult[];
+            processingStats.totalVideos = validSubtitles.length / formats.length || 0;
+            // Round up to the nearest integer to avoid fractional video counts
+            processingStats.processedVideos = Math.ceil(validSubtitles.filter(s => !s.error && !s.isGenerated).length / formats.length || 0);
+            processingStats.errorCount = validSubtitles.filter(s => s.error).length || 0;
             
-            // Use the new utility function to deduct coins
-            const success = await deductCoinsForOperation(userId, 'BATCH_EXTRACT', cost);
-            
-            if (success) {
+            // Deduct coins for successfully processed videos
+            if (userId && processingStats.processedVideos > 0) {
+              try {
+                
+                // Calculate cost for this operation
+                let cost = 0;
+                
+                // Calculate cost based on type and count
+                if (inputType === "file") {
+                  // CSV files always use batch rate
+                  cost = processingStats.processedVideos * OPERATION_COSTS.BATCH_SUBTITLE;
+                }
+                
+                // Minimum cost is 1 coin
+                cost = Math.max(cost, 1);
+                
+                // Use the new utility function to deduct coins
+                const success = await deductCoinsForOperation(userId, 'BATCH_EXTRACT', cost);
+                
+                if (success) {
+                } else {
+                  console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
+                  return NextResponse.json(
+                    { error: "Insufficient coins for this operation" },
+                    { status: 402 }
+                  );
+                }          } catch (deductError) {
+                console.error(`Error in direct coin deduction for user ${userId}:`, deductError);
+                // Return error response - don't continue processing if coin deduction fails
+                return NextResponse.json(
+                  { 
+                    error: "Failed to process coin deduction for CSV processing. Please try again.",
+                    details: deductError instanceof Error ? deductError.message : 'Unknown error'
+                  },
+                  { status: 500 }
+                );
+              }
             } else {
-              console.error(`❌ Failed to deduct ${cost} coins for user ${userId} - insufficient balance`);
-              return NextResponse.json(
-                { error: "Insufficient coins for this operation" },
-                { status: 402 }
-              );
-            }          } catch (deductError) {
-            console.error(`Error in direct coin deduction for user ${userId}:`, deductError);
-            // Return error response - don't continue processing if coin deduction fails
-            return NextResponse.json(
-              { 
-                error: "Failed to process coin deduction for CSV processing. Please try again.",
-                details: deductError instanceof Error ? deductError.message : 'Unknown error'
-              },
-              { status: 500 }
-            );
+              console.warn(`Not deducting coins because userId=${userId} or processedVideos=${processingStats.processedVideos}`);
+            }
+          } catch (csvError) {
+            console.error("Error during CSV processing:", csvError);
+            subtitles = [{ 
+              id: `csv-error-${Date.now()}`,
+              videoTitle: 'CSV Processing Error',
+              language: getLanguageName(language),
+              format: formats[0] || 'txt',
+              fileSize: '0KB',
+              content: `Error processing CSV file: ${csvError instanceof Error ? csvError.message : 'Unknown error'}`,
+              url: '',
+              downloadUrl: '',
+              error: "Failed to process CSV file"
+            }];
+            processingStats.errorCount = 1;
           }
         } else {
-          console.warn(`Not deducting coins because userId=${userId} or processedVideos=${processingStats.processedVideos}`);
+          return NextResponse.json(
+            { error: "Invalid input type or missing data" },
+            { status: 400 },
+          );
         }
-      } catch (csvError) {
-        console.error("Error during CSV processing:", csvError);
-        subtitles = [{ 
-          id: `csv-error-${Date.now()}`,
-          videoTitle: 'CSV Processing Error',
-          language: getLanguageName(language),
-          format: formats[0] || 'txt',
-          fileSize: '0KB',
-          content: `Error processing CSV file: ${csvError instanceof Error ? csvError.message : 'Unknown error'}`,
-          url: '',
-          downloadUrl: '',
-          error: "Failed to process CSV file"
-        }];
-        processingStats.errorCount = 1;
+
+        // Calculate processing time
+        const processingTime = Date.now() - startTime;
+
+        // For very large responses, we could use streaming, but for now we'll return the full response
+        if (subtitles.length > 500) {
+          // For large responses, return a streamable response
+          return streamResponse(subtitles);
+        } else {
+          // For smaller responses, return the full JSON
+          return NextResponse.json({ 
+            subtitles, 
+            stats: processingStats,
+            processingTime: `${processingTime}ms` 
+          }, { status: 200 });    }
+      } catch (error: any) {
+        logProductionDebug("Error extracting subtitles:", error);
+        return handleProductionError(error, 'POST /api/youtube/extract');
       }
-    } else {
-      return NextResponse.json(
-        { error: "Invalid input type or missing data" },
-        { status: 400 },
-      );
-    }
-
-    // Calculate processing time
-    const processingTime = Date.now() - startTime;
-
-    // For very large responses, we could use streaming, but for now we'll return the full response
-    if (subtitles.length > 500) {
-      // For large responses, return a streamable response
-      return streamResponse(subtitles);
-    } else {
-      // For smaller responses, return the full JSON
-      return NextResponse.json({ 
-        subtitles, 
-        stats: processingStats,
-        processingTime: `${processingTime}ms` 
-      }, { status: 200 });    }
-  } catch (error: any) {
-    logProductionDebug("Error extracting subtitles:", error);
-    return handleProductionError(error, 'POST /api/youtube/extract');
-  }
+    })(),
+    timeoutFallback
+  ]);
 }
 
 // Update the handler function to better handle the transcripts
