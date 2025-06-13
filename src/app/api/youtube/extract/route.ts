@@ -1029,6 +1029,12 @@ async function processYouTubeUrl(
 
     // Add batch processing metadata
     const results = batchResults.flat();
+    // Ensure all error results have their error message in the content field for UI display
+    results.forEach(r => {
+      if (r.error && !r.content.includes(r.error)) {
+        r.content = `${r.content}\nError: ${r.error}`;
+      }
+    });
     
     if (videoUrls.length > 1) {
       const successCount = results.filter(r => !r.error && !r.isGenerated).length;
