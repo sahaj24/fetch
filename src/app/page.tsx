@@ -160,10 +160,10 @@ export default function Home() {
   const [processedVideos, setProcessedVideos] = useState(0);
   const [totalVideos, setTotalVideos] = useState(0);
   const [subtitles, setSubtitles] = useState<any[]>([]);
-  
-  // For time estimation
+    // For time estimation
   const [startTime, setStartTime] = useState<number>(0);
   const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<string>("--:--");
+  const [processingMessage, setProcessingMessage] = useState<string>("");
 
   // For coin cost calculation
   const [coinCostEstimate, setCoinCostEstimate] = useState(0);
@@ -395,10 +395,8 @@ export default function Home() {
   const handleInputChange = (data: { videoCount: number; isPlaylist: boolean }) => {
     setVideoCount(data.videoCount);
     setIsPlaylist(data.isPlaylist);
-  };
-  
-  // Start simulated progress for UI feedback
-  const startSimulatedProgress = () => {
+  };  // Enhanced progress simulation for long-running requests
+  const startSimulatedProgress = (isPlaylistRequest = false) => {
     const start = Date.now();
     setStartTime(start);
     let currentProgress = 0;
@@ -408,10 +406,38 @@ export default function Home() {
       // Calculate elapsed time since start
       const elapsedTime = (Date.now() - start) / 1000; // in seconds
       
-      // Update progress more realistically
-      const progressIncrement = Math.random() * 3;
+      // Update progress more realistically - slower for playlists
+      const progressIncrement = isPlaylistRequest ? Math.random() * 1.5 : Math.random() * 3;
       currentProgress += progressIncrement;
       currentProgress = Math.min(currentProgress, 95); // Cap at 95% until we get actual results
+      
+      // Update processing message based on progress stage for playlists
+      if (isPlaylistRequest) {
+        if (currentProgress < 15) {
+          setProcessingMessage("Analyzing playlist structure...");
+        } else if (currentProgress < 30) {
+          setProcessingMessage("Extracting video IDs from playlist...");
+        } else if (currentProgress < 50) {
+          setProcessingMessage("Processing individual videos...");
+        } else if (currentProgress < 75) {
+          setProcessingMessage("Extracting subtitles from videos...");
+        } else if (currentProgress < 90) {
+          setProcessingMessage("Finalizing subtitle compilation...");
+        } else {
+          setProcessingMessage("Almost complete...");
+        }
+      } else {
+        // Default messages for single videos
+        if (currentProgress < 25) {
+          setProcessingMessage("Initializing video processing...");
+        } else if (currentProgress < 50) {
+          setProcessingMessage("Extracting subtitle data...");
+        } else if (currentProgress < 75) {
+          setProcessingMessage("Processing subtitle formats...");
+        } else {
+          setProcessingMessage("Finalizing subtitles...");
+        }
+      }
       
       // Calculate time remaining based on progress rate
       if (currentProgress > 5) { // Wait until we have some progress to avoid wild initial estimates
@@ -427,8 +453,8 @@ export default function Home() {
       }
       
       setProgress(currentProgress);
-    }, 300);
-  };  // Function to handle input data changes from InputSection
+    }, isPlaylistRequest ? 1000 : 300); // Slower updates for playlists (1s vs 300ms)
+  };// Function to handle input data changes from InputSection
   const handleInputDataChange = useCallback((data: {
     inputType: "url" | "file";
     url?: string;
@@ -515,13 +541,12 @@ export default function Home() {
     setEstimatedTimeRemaining("--:--");
 
     // Save state before processing in case auth redirect is needed
-    saveState();
-
-    // Start progress simulation with time estimation
-    const progressInterval = startSimulatedProgress();
-    
-    // Prepare timeout configuration for fetch request
-    const timeoutMs = payload.inputType === 'url' && payload.url?.includes('playlist') ? 900000 : 300000; // 15 min for playlists, 5 min for videos
+    saveState();    // Start progress simulation with time estimation
+    const isPlaylistRequest = payload.inputType === 'url' && payload.url?.includes('playlist');
+    const progressInterval = startSimulatedProgress(isPlaylistRequest);
+      // Prepare timeout configuration for fetch request
+    // Increased timeouts to match server-side processing (2 hours for playlists, 30 minutes for videos)
+    const timeoutMs = payload.inputType === 'url' && payload.url?.includes('playlist') ? 7200000 : 1800000; // 2 hours for playlists, 30 min for videos
     let timeoutId: NodeJS.Timeout | null = null;
   
     try {
@@ -640,10 +665,12 @@ export default function Home() {
         console.warn(`⏰ Request timeout after ${Math.floor(timeoutMs / 60000)} minutes`);
         controller.abort();
       }, timeoutMs);
+        console.log(`🚀 Starting request with ${Math.floor(timeoutMs / 60000)}-minute timeout for ${payload.inputType === 'url' && payload.url?.includes('playlist') ? 'playlist' : 'single video'}`);
       
-      console.log(`🚀 Starting request with ${Math.floor(timeoutMs / 60000)}-minute timeout for ${payload.inputType === 'url' && payload.url?.includes('playlist') ? 'playlist' : 'single video'}`);
-      
-      const response = await fetch("/api/youtube/extract", {
+      // For playlists, show extended processing message
+      if (payload.inputType === 'url' && payload.url?.includes('playlist')) {
+        console.log('📋 Processing playlist - this may take several minutes depending on playlist size');
+      }const response = await fetch("/api/youtube/extract", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
@@ -656,11 +683,13 @@ export default function Home() {
           ...(userId ? { "skipCoinDeduction": true } : {})
         }),
         signal: controller.signal
-      });
-
-      // Guard against HTML responses when JSON is expected
+      });      // Guard against HTML responses when JSON is expected
       const contentType = response.headers.get("content-type") || "";
       if (!contentType.includes("application/json")) {
+        // Check for specific 504 Gateway Timeout
+        if (response.status === 504) {
+          throw new Error(`Gateway Timeout: The server took too long to process your request. This often happens with large playlists. Please try again or consider processing fewer videos at once.`);
+        }
         // Non-JSON response (e.g., HTML error), abort parsing and let catch handle UI
         throw new Error(`Server Error: ${response.status}`);
       }
@@ -800,11 +829,16 @@ export default function Home() {
       // Handle timeout errors specifically
       let errorMessage = error.message || "Processing failed";
       let errorContent = `An error occurred while processing your request:\n\n${error.message || 'Unknown error'}`;
-      
-      if (error.name === 'AbortError') {
+        if (error.name === 'AbortError') {
         const timeoutMinutes = Math.floor(timeoutMs / 60000);
         errorMessage = `Request timeout after ${timeoutMinutes} minutes`;
         errorContent = `The request timed out after ${timeoutMinutes} minutes.\n\nThis can happen with:\n• Very large playlists (100+ videos)\n• Complex video processing\n• Network connectivity issues\n\nSuggestions:\n• Try processing a smaller batch of videos\n• Check your internet connection\n• For large playlists, consider breaking them into smaller chunks\n• Contact support if timeouts persist with smaller requests`;
+      } else if (error.message?.includes('Gateway Timeout') || error.message?.includes('504')) {
+        errorMessage = "Gateway Timeout";
+        errorContent = `The server gateway timed out while processing your request.\n\nThis typically happens when:\n• Processing very large playlists\n• Server is under heavy load\n• Network issues between you and the server\n\nSuggestions:\n• Wait a few minutes and try again\n• Try processing fewer videos at once\n• For large playlists, break them into smaller batches\n• Check if the playlist is accessible and public`;
+      } else if (error.message?.includes('Server Error: 5')) {
+        errorMessage = "Server Error";
+        errorContent = `A server error occurred while processing your request.\n\nThis can happen due to:\n• Temporary server issues\n• Resource constraints\n• Invalid or inaccessible content\n\nSuggestions:\n• Try again in a few minutes\n• Check that your URLs are valid and accessible\n• Contact support if the issue persists`;
       }
       
       toast.error(errorMessage, {
