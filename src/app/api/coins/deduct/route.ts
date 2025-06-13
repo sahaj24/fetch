@@ -12,13 +12,6 @@ const supabase = createClient(
  * This implementation is completely standalone and doesn't rely on other complex functions
  */
 export async function POST(request: NextRequest) {
-  // BYPASS COIN DEDUCTION FOR TESTING
-  return NextResponse.json({
-    success: true,
-    remainingBalance: 9999,
-    deducted: 0
-  });
-  
   try {
     // Get user ID from headers
     const userId = request.headers.get('x-user-id');
